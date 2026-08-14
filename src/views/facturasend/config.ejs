@@ -1,0 +1,76 @@
+<%- include('../partials/header') %>
+<div class="page-head electronic-config-head">
+  <div>
+    <h1>Configuracion electronica</h1>
+    <p>Credenciales de FacturaSend para emitir documentos electronicos.</p>
+  </div>
+  <div class="actions">
+    <a class="button secondary" href="/facturas">Volver</a>
+    <% if (configRow) { %>
+      <form method="post" action="/facturasend/config/test">
+        <button type="submit">Probar conexion</button>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<section class="grid two electronic-config-grid">
+  <form class="panel stack electronic-config-import" method="post" action="/facturasend/config/import">
+    <div class="config-section-heading">
+      <span class="config-icon">↥</span>
+      <div>
+        <h2>Importar configuración</h2>
+        <p>Cargue el archivo recibido o complete los datos manualmente.</p>
+      </div>
+    </div>
+    <label>
+      Ruta del archivo JSON
+      <input name="config_path" value="<%= defaultPath %>">
+    </label>
+    <label>
+      O pegar JSON
+      <textarea name="config_json" rows="10" placeholder="Pegue aqui el contenido de facturasend-config.json"></textarea>
+    </label>
+    <div class="config-subheading"><span></span><h3>Ajuste manual</h3><span></span></div>
+    <label>
+      URL API
+      <input name="base_url" value="<%= configRow ? configRow.base_url : '' %>" placeholder="https://api.facturasend.com.py">
+    </label>
+    <label>
+      Tenant
+      <input name="tenant" value="<%= configRow ? configRow.tenant : '' %>" placeholder="empresaficticia_1528">
+    </label>
+    <label>
+      API Key
+      <input name="api_key" placeholder="Pegue la API Key si desea reemplazar la importada">
+    </label>
+    <button class="config-primary-action" type="submit">Guardar configuración</button>
+  </form>
+
+  <section class="panel stack electronic-config-active">
+    <div class="config-section-heading">
+      <span class="config-icon active">✓</span>
+      <div>
+        <h2>Configuración activa</h2>
+        <p>Estos datos se utilizarán al emitir documentos.</p>
+      </div>
+    </div>
+    <% if (configRow) { %>
+      <div class="config-active-badge">Configuración lista para usar</div>
+      <dl class="detail-list compact-detail">
+        <div><dt>URL API</dt><dd><%= configRow.base_url %></dd></div>
+        <div><dt>Tenant</dt><dd><%= configRow.tenant %></dd></div>
+        <div><dt>API Key</dt><dd><%= configRow.api_key_masked %></dd></div>
+        <div><dt>RUC emisor</dt><dd><%= configRow.params.ruc || '-' %></dd></div>
+        <div><dt>Razon social</dt><dd><%= configRow.params.razonSocial || '-' %></dd></div>
+        <div><dt>Timbrado</dt><dd><%= configRow.params.timbradoNumero || '-' %></dd></div>
+      </dl>
+    <% } else { %>
+      <div class="config-empty-state">
+        <strong>Sin configuración activa</strong>
+        <span>Importe una configuración para habilitar la emisión electrónica.</span>
+      </div>
+    <% } %>
+  </section>
+</section>
+<%- include('../partials/footer') %>

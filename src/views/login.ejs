@@ -1,0 +1,30 @@
+<%- include('partials/header') %>
+<section class="login-shell">
+  <section class="login-panel">
+    <div class="login-brand">
+      <div class="login-mark small">
+        <img src="/logo.jpg" alt="LAVADERO A8">
+      </div>
+      <div>
+        <p class="eyebrow">LAVADERO A8</p>
+        <h1>Ingresar</h1>
+      </div>
+    </div>
+    <p class="login-copy compact">
+      Accede al sistema para administrar lavados, caja, clientes y servicios.
+    </p>
+    <p class="app-version">Versión <%= appVersion %></p>
+    <form action="/login" method="post" class="stack login-form">
+      <label>
+        Usuario
+        <input name="login" autocomplete="username" required autofocus>
+      </label>
+      <label>
+        Clave
+        <input name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit">Entrar</button>
+    </form>
+  </section>
+</section>
+<%- include('partials/footer') %>
