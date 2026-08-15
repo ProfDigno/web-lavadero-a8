@@ -1,0 +1,173 @@
+<%- include('partials/header') %>
+
+<% const isDetail = Boolean(detalle); %>
+<div class="page-head">
+  <div>
+    <h1><%= isDetail ? 'Detalle de cierre' : 'Cierre de caja' %></h1>
+    <p><%= isDetail ? 'Resumen congelado de una sesión de caja' : 'Apertura, arqueo y cierre de la caja física' %></p>
+  </div>
+  <div class="page-head-actions">
+    <a class="button secondary" href="/caja">Caja actual</a>
+    <% if (isDetail) { %>
+      <a class="button secondary" href="/caja-cierres/<%= detalle.id %>/pdf/completo" target="_blank" rel="noopener">Imprimir ticket completo</a>
+      <a class="button secondary" href="/caja-cierres/<%= detalle.id %>/pdf/resumido" target="_blank" rel="noopener">Imprimir ticket resumido</a>
+      <a class="button secondary" href="/caja-cierres">Volver a cierres</a>
+    <% } %>
+  </div>
+</div>
+
+<% if (schemaMissing) { %>
+  <section class="panel caja-cierre-notice error">
+    <h2>Migración pendiente</h2>
+    <p>La interfaz necesita crear las tablas de cierre de caja antes de poder utilizarse.</p>
+    <code>npm run migrate</code>
+  </section>
+<% } else if (isDetail) { %>
+  <section class="metrics caja-cierre-metrics">
+    <article><span>Estado</span><strong><%= detalle.estado %></strong></article>
+    <article><span>Ingresos</span><strong><%= formatMoney(detalle.total_ingresos) %></strong></article>
+    <article><span>Egresos</span><strong><%= formatMoney(detalle.total_egresos) %></strong></article>
+    <article><span>Neto</span><strong><%= formatMoney(detalle.total_neto) %></strong></article>
+    <article><span>Efectivo esperado</span><strong><%= formatMoney(detalle.efectivo_esperado) %></strong></article>
+    <article><span>Efectivo contado</span><strong><%= formatMoney(detalle.efectivo_contado) %></strong></article>
+    <article class="<%= Number(detalle.diferencia || 0) < 0 ? 'metric-warning' : '' %>"><span>Diferencia</span><strong><%= formatMoney(detalle.diferencia) %></strong></article>
+  </section>
+
+  <section class="grid two caja-cierre-grid">
+    <div class="panel">
+      <h2>Datos de la sesión</h2>
+      <dl class="caja-cierre-definition-list">
+        <dt>Apertura</dt><dd><%= formatDateTime(detalle.abierta_en) %></dd>
+        <dt>Abierta por</dt><dd><%= detalle.abierta_por_nombre %></dd>
+        <dt>Cierre</dt><dd><%= detalle.cerrada_en ? formatDateTime(detalle.cerrada_en) : 'Pendiente' %></dd>
+        <dt>Cerrada por</dt><dd><%= detalle.cerrada_por_nombre || 'Pendiente' %></dd>
+        <dt>Saldo inicial</dt><dd><%= formatMoney(detalle.saldo_inicial_efectivo) %></dd>
+        <dt>Observaciones</dt><dd><%= detalle.observaciones || 'Sin observaciones' %></dd>
+      </dl>
+    </div>
+    <div class="panel">
+      <h2>Arqueo por denominación</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tipo</th><th>Valor</th><th>Cantidad</th><th>Total</th></tr></thead>
+          <tbody>
+            <% detalle.denominaciones.forEach((item) => { %>
+              <tr><td><%= item.tipo %></td><td class="money-cell"><%= formatMoney(item.valor) %></td><td><%= item.cantidad %></td><td class="money-cell"><%= formatMoney(Number(item.valor) * Number(item.cantidad)) %></td></tr>
+            <% }) %>
+            <% if (!detalle.denominaciones.length) { %><tr><td colspan="4">Sin denominaciones registradas.</td></tr><% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel caja-cierre-panel">
+    <h2>Resumen por forma de pago</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Forma de pago</th><th>Ingresos</th><th>Egresos</th><th>Neto</th></tr></thead>
+        <tbody>
+          <% detalle.formas_pago.forEach((forma) => { %>
+            <tr><td><%- include('partials/payment_chip', { nombre: forma.forma_pago_nombre, icono: forma.forma_pago_icono, color: forma.forma_pago_color }) %></td><td class="money-cell"><%= formatMoney(forma.ingresos) %></td><td class="money-cell"><%= formatMoney(forma.egresos) %></td><td class="money-cell"><strong><%= formatMoney(forma.neto) %></strong></td></tr>
+          <% }) %>
+          <% if (!detalle.formas_pago.length) { %><tr><td colspan="4">Sin movimientos registrados.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel caja-cierre-panel">
+    <h2>Movimientos incluidos (<%= detalle.movimientos.length %>)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Referencia</th><th>Forma de pago</th><th>Monto</th></tr></thead>
+        <tbody>
+          <% detalle.movimientos.forEach((movimiento) => { %>
+            <tr><td><%= formatDateTimeShort(movimiento.ocurrido_en) %></td><td><span class="badge <%= movimiento.tipo === 'INGRESO' ? 'badge-success' : 'badge-danger' %>"><%= movimiento.tipo %></span></td><td><%= movimiento.origen %></td><td><strong><%= movimiento.referencia || '-' %></strong><br><small><%= movimiento.descripcion || '' %></small></td><td><%- include('partials/payment_chip', { nombre: movimiento.forma_pago_nombre, icono: movimiento.forma_pago_icono, color: movimiento.forma_pago_color }) %></td><td class="money-cell"><%= formatMoney(movimiento.monto) %></td></tr>
+          <% }) %>
+          <% if (!detalle.movimientos.length) { %><tr><td colspan="6">La sesión no contiene movimientos.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+<% } else { %>
+  <% if (sesion) { %>
+    <section class="panel caja-cierre-active">
+      <div class="section-title">
+        <div><h2>Sesión abierta</h2><p>Abierta el <%= formatDateTime(sesion.abierta_en) %> por <strong><%= sesion.abierta_por_nombre %></strong></p></div>
+        <span class="badge badge-success">ABIERTA</span>
+      </div>
+      <div class="metrics compact caja-cierre-live-metrics">
+        <article><span>Saldo inicial</span><strong><%= formatMoney(sesion.saldo_inicial_efectivo) %></strong></article>
+        <article><span>Ingresos</span><strong><%= formatMoney(resumen.ingresos) %></strong></article>
+        <article><span>Egresos</span><strong><%= formatMoney(resumen.egresos) %></strong></article>
+        <article><span>Efectivo esperado</span><strong data-expected-cash="<%= resumen.efectivoEsperado %>"><%= formatMoney(resumen.efectivoEsperado) %></strong></article>
+      </div>
+      <div class="grid two caja-cierre-grid">
+        <div>
+          <h3>Movimientos elegibles (<%= movimientos.length %>)</h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fecha</th><th>Tipo</th><th>Origen</th><th>Referencia</th><th>Monto</th></tr></thead>
+              <tbody>
+                <% movimientos.forEach((movimiento) => { %>
+                  <tr><td><%= formatDateTimeShort(movimiento.ocurrido_en) %></td><td><%= movimiento.tipo %></td><td><%= movimiento.origen %></td><td><%= movimiento.referencia || '-' %></td><td class="money-cell"><%= formatMoney(movimiento.monto) %></td></tr>
+                <% }) %>
+                <% if (!movimientos.length) { %><tr><td colspan="5">Sin movimientos elegibles.</td></tr><% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3>Arqueo y cierre</h3>
+          <form method="post" action="/caja-cierres/<%= sesion.id %>/cerrar" class="stack caja-cierre-form" data-caja-cierre-form>
+            <div class="denomination-list" data-denomination-list>
+              <% [100000, 50000, 20000, 10000, 5000, 2000, 1000].forEach((valor) => { %>
+                <div class="denomination-row denomination-fixed-row" data-denomination-row>
+                  <input type="hidden" name="denominacion_tipo[]" value="BILLETE">
+                  <input type="hidden" name="denominacion_valor[]" value="<%= valor %>" data-denomination-value>
+                  <div class="denomination-fixed-field"><span>Tipo</span><strong>Billete</strong></div>
+                  <div class="denomination-fixed-field"><span>Valor</span><strong><%= formatMoney(valor) %></strong></div>
+                  <label>Cantidad<input name="denominacion_cantidad[]" type="number" min="0" step="1" value="0" required data-denomination-count></label>
+                  <output class="money-cell" data-denomination-total><%= formatMoney(0) %></output>
+                </div>
+              <% }) %>
+            </div>
+            <div class="caja-cierre-counted"><span>Efectivo contado</span><strong data-counted-cash>Gs. 0</strong></div>
+            <div class="caja-cierre-difference"><span>Diferencia</span><strong data-cash-difference>Gs. 0</strong></div>
+            <label>Observaciones<textarea name="observaciones" rows="3" placeholder="Observaciones del cierre"></textarea></label>
+            <button type="submit" data-confirm-close>Cerrar sesión</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  <% } else { %>
+    <section class="panel caja-cierre-open-panel">
+      <h2>Abrir sesión de caja</h2>
+      <p>No hay una sesión abierta para la caja física.</p>
+      <form method="post" action="/caja-cierres/abrir" class="stack caja-cierre-form">
+        <label>Saldo inicial de efectivo<input name="saldo_inicial_efectivo" type="number" min="0" step="0.01" value="0" required></label>
+        <label>Observaciones<textarea name="observaciones" rows="3" placeholder="Observaciones de la apertura"></textarea></label>
+        <button type="submit">Abrir sesión</button>
+      </form>
+    </section>
+  <% } %>
+
+  <section class="panel caja-cierre-panel">
+    <div class="section-title"><div><h2>Historial de cierres</h2><p>Últimas 30 sesiones registradas.</p></div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Estado</th><th>Apertura</th><th>Cierre</th><th>Responsables</th><th>Ingresos</th><th>Egresos</th><th>Diferencia</th><th></th></tr></thead>
+        <tbody>
+          <% historial.forEach((item) => { %>
+            <tr><td><span class="badge <%= item.estado === 'CERRADA' ? 'badge-success' : 'badge-warning' %>"><%= item.estado %></span></td><td><%= formatDateTimeShort(item.abierta_en) %></td><td><%= item.cerrada_en ? formatDateTimeShort(item.cerrada_en) : '-' %></td><td><%= item.abierta_por_nombre %><% if (item.cerrada_por_nombre) { %> / <%= item.cerrada_por_nombre %><% } %></td><td class="money-cell"><%= formatMoney(item.total_ingresos) %></td><td class="money-cell"><%= formatMoney(item.total_egresos) %></td><td class="money-cell"><%= item.diferencia === null ? '-' : formatMoney(item.diferencia) %></td><td><a class="button secondary compact-button" href="/caja-cierres/<%= item.id %>">Ver</a></td></tr>
+          <% }) %>
+          <% if (!historial.length) { %><tr><td colspan="8">Todavía no hay sesiones registradas.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+<% } %>
+
+<script src="/js/caja_cierres.js?v=20260814-1"></script>
+<%- include('partials/footer') %>

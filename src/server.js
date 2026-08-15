@@ -9,6 +9,15 @@ const ExcelJS = require("exceljs");
 const PDFDocument = require("pdfkit");
 const config = require("./config");
 const { query, withTransaction } = require("./db");
+const {
+  abrirCajaSesion,
+  cerrarCajaSesion,
+  getCajaMovimientosElegibles,
+  getCajaSesion,
+  getCajaSesionAbierta,
+  getCajaSesiones,
+  summarizeCajaMovimientos
+} = require("./caja-cierres");
 const { startTelegramBot } = require("./telegram-bot");
 
 const app = express();
@@ -105,7 +114,7 @@ app.use(async (req, res, next) => {
         const itemAllowed = permission.item_activo === true && permission.evento_activo === true;
         if (permission.codigo_evento) {
           authorization.items.set(permission.codigo_evento, itemAllowed);
-          authorization.eventos.set(permission.codigo_evento, permission.evento_activo === true);
+          authorization.eventos.set(permission.codigo_evento, permission.item_activo === true);
         }
       });
     }
@@ -153,7 +162,8 @@ function userErrorMessage(error) {
       gasto_tipo_nombre_key: "Ya existe un tipo de gasto con ese nombre.",
       usuarios_login_key: "Ya existe un usuario con ese login.",
       usuario_roll_roll_key: "Ya existe ese rol.",
-      usuario_roll_evento_codigo_key: "Ya existe ese evento para el rol seleccionado."
+      usuario_roll_evento_codigo_key: "Ya existe ese evento para el rol seleccionado.",
+      caja_sesiones_una_abierta_idx: "Ya existe una sesión de caja abierta."
     };
     return uniqueMessages[error.constraint] || "Ya existe un registro con esos datos.";
   }
@@ -200,6 +210,28 @@ function requireEvent(code) {
 
 function currentUser(req) {
   return req.session.user ? req.session.user.nombre : "Sistema";
+}
+
+function cajaCierresSchemaMissing(error) {
+  return Boolean(
+    error &&
+    (error.code === "42P01" || error.code === "42703" || /caja_sesiones|caja_sesion_|ocurrido_en/i.test(error.message || ""))
+  );
+}
+
+function cajaCierresSchemaMessage() {
+  return "La interfaz de cierre de caja necesita la migración 033. Ejecute npm run migrate y vuelva a intentar.";
+}
+
+function parseCajaDenominaciones(body) {
+  const tipos = Array.isArray(body.denominacion_tipo) ? body.denominacion_tipo : [];
+  const valores = Array.isArray(body.denominacion_valor) ? body.denominacion_valor : [];
+  const cantidades = Array.isArray(body.denominacion_cantidad) ? body.denominacion_cantidad : [];
+  return tipos.map((tipo, index) => ({
+    tipo,
+    valor: valores[index],
+    cantidad: cantidades[index]
+  })).filter((item) => String(item.valor || "").trim() !== "" || String(item.cantidad || "").trim() !== "");
 }
 
 function toMoney(value) {
@@ -612,6 +644,166 @@ function drawPdfInfoCard(doc, x, y, width, title, value, color = "#17202a") {
   doc.font("Helvetica-Bold").fontSize(10).fillColor(color).text(String(value || ""), x + 8, y + 22, {
     width: width - 16,
     ellipsis: true
+  });
+}
+
+function cajaTicketMm(value) {
+  return Number(value) * 72 / 25.4;
+}
+
+function cajaTicketText(value, maxLength = 180) {
+  return String(value ?? "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function cajaTicketHeight(detalle, resumido) {
+  const formsHeight = Math.max(1, detalle.formas_pago.length) * 28;
+  const denominationsHeight = Math.max(1, detalle.denominaciones.length) * 23;
+  if (resumido) return 430 + formsHeight + denominationsHeight;
+  const movementsHeight = detalle.movimientos.reduce((total, movement) => {
+    const textLength = cajaTicketText(`${movement.referencia || ""} ${movement.descripcion || ""}`, 220).length;
+    return total + 58 + Math.ceil(textLength / 42) * 9;
+  }, 0);
+  return 430 + formsHeight + denominationsHeight + movementsHeight;
+}
+
+function createCajaTicketPdf(detalle, resumido = false) {
+  return new Promise((resolve, reject) => {
+    const width = cajaTicketMm(76);
+    const height = cajaTicketHeight(detalle, resumido);
+    const doc = new PDFDocument({
+      size: [width, height],
+      margins: { top: 18, right: 12, bottom: 18, left: 12 }
+    });
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const contentWidth = width - doc.page.margins.left - doc.page.margins.right;
+    const left = doc.page.margins.left;
+    const money = (value) => formatMoney(value);
+    const text = (value, options = {}) => {
+      doc.font(options.bold ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(options.size || 8)
+        .fillColor(options.color || "#111827")
+        .text(cajaTicketText(value, options.maxLength || 220), left, doc.y, {
+          width: options.width || contentWidth,
+          align: options.align || "left",
+          lineGap: options.lineGap || 1
+        });
+    };
+    const separator = () => {
+      doc.moveTo(left, doc.y + 3).lineTo(left + contentWidth, doc.y + 3).strokeColor("#9ca3af").lineWidth(0.5).stroke();
+      doc.moveDown(0.55);
+    };
+    const section = (title) => {
+      doc.moveDown(0.5);
+      doc.font("Helvetica-Bold").fontSize(8).fillColor("#115e59").text(title, left, doc.y, { width: contentWidth });
+      doc.moveDown(0.2);
+    };
+    const keyValue = (label, value) => {
+      const y = doc.y;
+      const labelWidth = contentWidth * 0.47;
+      const valueWidth = contentWidth * 0.53;
+      const valueText = cajaTicketText(value);
+      doc.font("Helvetica").fontSize(7).fillColor("#4b5563").text(label, left, y, { width: labelWidth });
+      doc.font("Helvetica-Bold").fontSize(7).fillColor("#111827");
+      const valueHeight = doc.heightOfString(valueText, { width: valueWidth, lineGap: 1 });
+      doc.text(valueText, left + labelWidth, y, { width: valueWidth, align: "right", lineGap: 1 });
+      doc.y = y + Math.max(10, valueHeight + 2);
+    };
+    const tableRow = (values, widths, options = {}) => {
+      const startY = doc.y;
+      const padding = options.padding || 3;
+      const fontSize = options.fontSize || 7;
+      doc.font(options.bold ? "Helvetica-Bold" : "Helvetica").fontSize(fontSize);
+      const heights = values.map((value, index) => doc.heightOfString(cajaTicketText(value, options.maxLength || 180), {
+        width: widths[index] - padding * 2,
+        lineGap: 1
+      }) + padding * 2);
+      const rowHeight = Math.max(options.minHeight || 16, ...heights);
+      if (options.background) {
+        doc.rect(left, startY, widths.reduce((sum, widthValue) => sum + widthValue, 0), rowHeight).fillColor(options.background).fill();
+      }
+      let x = left;
+      values.forEach((value, index) => {
+        doc.font(options.bold ? "Helvetica-Bold" : "Helvetica").fontSize(fontSize).fillColor(options.color || "#111827");
+        doc.text(cajaTicketText(value, options.maxLength || 180), x + padding, startY + padding, {
+          width: widths[index] - padding * 2,
+          lineGap: 1,
+          align: options.alignments?.[index] || "left"
+        });
+        x += widths[index];
+      });
+      doc.y = startY + rowHeight;
+    };
+
+    doc.font("Helvetica-Bold").fontSize(12).fillColor("#12343b").text("CIERRE DE CAJA", left, doc.y, { width: contentWidth, align: "center" });
+    doc.moveDown(0.25);
+    text(`Sesion #${detalle.id}`, { size: 8, bold: true, align: "center" });
+    text(`${detalle.estado} - generado ${formatDateTime(new Date())}`, { size: 7, color: "#4b5563", align: "center" });
+
+    section("DATOS DE LA SESION");
+    keyValue("Estado", detalle.estado);
+    keyValue("Apertura", formatDateTime(detalle.abierta_en));
+    keyValue("Abierta por", detalle.abierta_por_nombre);
+    keyValue("Cierre", detalle.cerrada_en ? formatDateTime(detalle.cerrada_en) : "Pendiente");
+    keyValue("Cerrada por", detalle.cerrada_por_nombre || "Pendiente");
+    keyValue("Saldo inicial", money(detalle.saldo_inicial_efectivo));
+    if (detalle.observaciones) keyValue("Observaciones", detalle.observaciones);
+
+    section("RESUMEN");
+    keyValue("Ingresos", money(detalle.total_ingresos));
+    keyValue("Egresos", money(detalle.total_egresos));
+    keyValue("Neto", money(detalle.total_neto));
+    keyValue("Efectivo esperado", money(detalle.efectivo_esperado));
+    keyValue("Efectivo contado", money(detalle.efectivo_contado));
+    keyValue("Diferencia", money(detalle.diferencia));
+
+    section("FORMAS DE PAGO");
+    const formWidths = [contentWidth * 0.40, contentWidth * 0.20, contentWidth * 0.20, contentWidth * 0.20];
+    tableRow(["Forma", "Ingresos", "Egresos", "Neto"], formWidths, { bold: true, background: "#e8f3f1", color: "#115e59", alignments: ["left", "right", "right", "right"] });
+    detalle.formas_pago.forEach((forma) => tableRow([
+      forma.forma_pago_nombre,
+      money(forma.ingresos),
+      money(forma.egresos),
+      money(forma.neto)
+    ], formWidths, { alignments: ["left", "right", "right", "right"] }));
+    if (!detalle.formas_pago.length) tableRow(["Sin movimientos", "", "", ""], formWidths);
+
+    section("ARQUEO");
+    const denominationWidths = [contentWidth * 0.28, contentWidth * 0.28, contentWidth * 0.18, contentWidth * 0.26];
+    tableRow(["Tipo", "Valor", "Cant.", "Subtotal"], denominationWidths, { bold: true, background: "#e8f3f1", color: "#115e59", alignments: ["left", "right", "right", "right"] });
+    detalle.denominaciones.forEach((item) => tableRow([
+      item.tipo,
+      money(item.valor),
+      item.cantidad,
+      money(Number(item.valor) * Number(item.cantidad))
+    ], denominationWidths, { alignments: ["left", "right", "right", "right"] }));
+    if (!detalle.denominaciones.length) tableRow(["Sin denominaciones", "", "", ""], denominationWidths);
+
+    if (!resumido) {
+      section(`MOVIMIENTOS (${detalle.movimientos.length})`);
+      detalle.movimientos.forEach((movement, index) => {
+        doc.font("Helvetica-Bold").fontSize(8).fillColor("#111827").text(
+          `${cajaTicketText(movement.referencia || `Movimiento #${index + 1}`, 100)}  ${money(movement.monto)}`,
+          left,
+          doc.y,
+          { width: contentWidth }
+        );
+        doc.moveDown(0.15);
+        text(`${formatDateTimeShort(movement.ocurrido_en)} - ${movement.tipo} - ${movement.origen}`, { size: 7, color: "#4b5563" });
+        text(`Forma de pago: ${movement.forma_pago_nombre || "-"}`, { size: 7, color: "#4b5563" });
+        if (movement.descripcion) text(movement.descripcion, { size: 7, color: "#4b5563", maxLength: 220 });
+        if (index < detalle.movimientos.length - 1) separator();
+      });
+      if (!detalle.movimientos.length) text("Sin movimientos incluidos.", { size: 7, color: "#4b5563" });
+    }
+
+    doc.moveDown(0.8);
+    separator();
+    text(`Sesion #${detalle.id} - ${resumido ? "Ticket resumido" : "Ticket completo"}`, { size: 7, color: "#4b5563", align: "center" });
+    doc.end();
   });
 }
 
@@ -1238,7 +1430,7 @@ app.get("/", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/caja", requireAuth, async (req, res, next) => {
+app.get("/caja", requireAuth, requireEvent("caja-ocultar"), async (req, res, next) => {
   try {
     const fecha = req.query.fecha || todayIso();
     const caja = await getCajaDia(fecha);
@@ -1248,7 +1440,121 @@ app.get("/caja", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/analisis-lavados", requireAuth, requireItem("AnalisisLavado-ocultar", "Análisis general deshabilitado para este roll"), async (req, res, next) => {
+app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res, next) => {
+  try {
+    const sesion = await getCajaSesionAbierta();
+    const movimientos = sesion
+      ? await getCajaMovimientosElegibles(sesion.abierta_en, new Date())
+      : [];
+    const resumen = sesion
+      ? summarizeCajaMovimientos(movimientos, sesion.saldo_inicial_efectivo)
+      : null;
+    const historial = await getCajaSesiones({ limit: 30 });
+    res.render("caja_cierres", {
+      title: "Cierre de caja",
+      sesion,
+      movimientos,
+      resumen,
+      historial,
+      detalle: null,
+      schemaMissing: false
+    });
+  } catch (error) {
+    if (cajaCierresSchemaMissing(error)) {
+      return res.render("caja_cierres", {
+        title: "Cierre de caja",
+        sesion: null,
+        movimientos: [],
+        resumen: null,
+        historial: [],
+        detalle: null,
+        schemaMissing: true
+      });
+    }
+    next(error);
+  }
+});
+
+app.post("/caja-cierres/abrir", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res) => {
+  try {
+    const saldoInicialEfectivo = toMoney(req.body.saldo_inicial_efectivo);
+    if (saldoInicialEfectivo < 0) throw new Error("El saldo inicial no puede ser negativo.");
+    await abrirCajaSesion({
+      abiertaPor: req.session.user.id,
+      saldoInicialEfectivo,
+      observaciones: String(req.body.observaciones || "").trim() || null,
+      creadoPor: currentUser(req)
+    });
+    setFlash(req, "success", "Sesión de caja abierta correctamente.");
+  } catch (error) {
+    setFlash(req, "error", cajaCierresSchemaMissing(error) ? cajaCierresSchemaMessage() : userErrorMessage(error));
+  }
+  res.redirect("/caja-cierres");
+});
+
+async function sendCajaTicketPdf(req, res, next, resumido) {
+  try {
+    const sessionId = Number(req.params.id);
+    if (!Number.isInteger(sessionId) || sessionId <= 0) {
+      return res.status(404).render("error", { title: "Cierre no encontrado", message: "La sesión de caja solicitada no existe." });
+    }
+    const detalle = await getCajaSesion(sessionId);
+    if (!detalle) return res.status(404).render("error", { title: "Cierre no encontrado", message: "La sesión de caja solicitada no existe." });
+
+    const pdf = await createCajaTicketPdf(detalle, resumido);
+    const filename = `caja-cierre-${safeDownloadName(detalle.id)}-${resumido ? "resumido" : "completo"}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+    res.end(pdf);
+  } catch (error) {
+    next(error);
+  }
+}
+
+app.get("/caja-cierres/:id/pdf/completo", requireAuth, requireEvent("cierre_caja-ocultar"), (req, res, next) => sendCajaTicketPdf(req, res, next, false));
+app.get("/caja-cierres/:id/pdf/resumido", requireAuth, requireEvent("cierre_caja-ocultar"), (req, res, next) => sendCajaTicketPdf(req, res, next, true));
+
+app.get("/caja-cierres/:id", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res, next) => {
+  try {
+    const detalle = await getCajaSesion(Number(req.params.id));
+    if (!detalle) return res.status(404).render("error", { title: "Cierre no encontrado", message: "La sesión de caja solicitada no existe." });
+    res.render("caja_cierres", {
+      title: "Detalle de cierre",
+      sesion: null,
+      movimientos: [],
+      resumen: null,
+      historial: [],
+      detalle,
+      schemaMissing: false
+    });
+  } catch (error) {
+    if (cajaCierresSchemaMissing(error)) {
+      return res.status(503).render("error", { title: "Migración pendiente", message: cajaCierresSchemaMessage() });
+    }
+    next(error);
+  }
+});
+
+app.post("/caja-cierres/:id/cerrar", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const denominaciones = parseCajaDenominaciones(req.body);
+    if (!denominaciones.length) throw new Error("Ingrese al menos una denominación para realizar el arqueo.");
+    await cerrarCajaSesion({
+      id,
+      cerradaPor: req.session.user.id,
+      denominaciones,
+      observaciones: String(req.body.observaciones || "").trim() || null
+    });
+    setFlash(req, "success", "Sesión de caja cerrada correctamente.");
+    return res.redirect(`/caja-cierres/${id}`);
+  } catch (error) {
+    setFlash(req, "error", cajaCierresSchemaMissing(error) ? cajaCierresSchemaMessage() : userErrorMessage(error));
+    return res.redirect("/caja-cierres");
+  }
+});
+
+app.get("/analisis-lavados", requireAuth, requireEvent("AnalisisLavado-ocultar"), async (req, res, next) => {
   try {
     let fechaInicio = req.query.fecha_inicio || todayIso();
     let fechaFin = req.query.fecha_fin || fechaInicio;
@@ -2175,7 +2481,7 @@ app.post("/lavados/:id/anular", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/grupo-creditos", requireAuth, async (req, res, next) => {
+app.get("/grupo-creditos", requireAuth, requireEvent("credito_grupo-ocultar"), async (req, res, next) => {
   try {
     const creditos = await query(
       `select gcc.*, g.nombre as grupo_nombre, fp.nombre as forma_pago,
@@ -2194,7 +2500,7 @@ app.get("/grupo-creditos", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/grupo-creditos/:id", requireAuth, async (req, res, next) => {
+app.get("/grupo-creditos/:id", requireAuth, requireEvent("credito_grupo-ocultar"), async (req, res, next) => {
   try {
     const detail = await getGrupoCreditoDetail(req.params.id);
     if (!detail) return res.status(404).render("error", { title: "No encontrado", message: "Credito de grupo no encontrado." });
@@ -2211,7 +2517,7 @@ app.get("/grupo-creditos/:id", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/grupo-creditos/:id/pagar", requireAuth, async (req, res) => {
+app.post("/grupo-creditos/:id/pagar", requireAuth, requireEvent("credito_grupo-ocultar"), async (req, res) => {
   try {
     const formaPagoId = Number(req.body.fk_idforma_pago || 0);
     if (!formaPagoId) throw new Error("Seleccione una forma de pago.");
@@ -2275,7 +2581,7 @@ app.post("/grupo-creditos/:id/pagar", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/grupo-creditos/:id/excel", requireAuth, async (req, res, next) => {
+app.get("/grupo-creditos/:id/excel", requireAuth, requireEvent("credito_grupo-ocultar"), async (req, res, next) => {
   try {
     const detail = await getGrupoCreditoDetail(req.params.id);
     if (!detail) return res.status(404).render("error", { title: "No encontrado", message: "Credito de grupo no encontrado." });
@@ -2484,7 +2790,7 @@ app.get("/grupo-creditos/:id/excel", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/grupo-creditos/:id/pdf", requireAuth, async (req, res, next) => {
+app.get("/grupo-creditos/:id/pdf", requireAuth, requireEvent("credito_grupo-ocultar"), async (req, res, next) => {
   try {
     const detail = await getGrupoCreditoDetail(req.params.id);
     if (!detail) return res.status(404).render("error", { title: "No encontrado", message: "Credito de grupo no encontrado." });
@@ -2614,7 +2920,7 @@ app.get("/grupo-creditos/:id/pdf", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/comisiones", requireAuth, async (req, res, next) => {
+app.get("/comisiones", requireAuth, requireEvent("comisiones-ocultar"), async (req, res, next) => {
   try {
     const fecha = req.query.fecha || todayIso();
     const [result, lavadosResult, valesResult] = await Promise.all([
@@ -2680,7 +2986,7 @@ app.get("/comisiones", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/analisis-personal", requireAuth, async (req, res, next) => {
+app.get("/analisis-personal", requireAuth, requireEvent("analisis_personal-ocultar"), async (req, res, next) => {
   try {
     let fechaInicio = req.query.fecha_inicio || todayIso();
     let fechaFin = req.query.fecha_fin || fechaInicio;
@@ -2874,7 +3180,25 @@ app.get("/vales/saldo", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/vales", requireAuth, async (req, res, next) => {
+app.get("/vales/saldos", requireAuth, async (req, res, next) => {
+  try {
+    const fecha = req.query.fecha || todayIso();
+    const result = await query(
+      `select p.idpersonal,
+              greatest(0, coalesce(cd.total_comision_40, 0) - coalesce(cd.total_vales, 0)) as saldo_personal
+       from personal p
+       left join comisiones_diarias cd on cd.fk_idpersonal = p.idpersonal and cd.fecha = $1
+       where p.activo = true
+       order by p.nombre`,
+      [fecha]
+    );
+    res.json({ saldos: result.rows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/vales", requireAuth, requireEvent("vale-ocultar"), async (req, res, next) => {
   try {
     const fecha = req.query.fecha || todayIso();
     const editId = req.query.edit;
@@ -2906,7 +3230,7 @@ app.get("/vales", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/vales", requireAuth, async (req, res) => {
+app.post("/vales", requireAuth, requireEvent("vale-ocultar"), async (req, res) => {
   try {
     const personalId = Number(req.body.fk_idpersonal || 0);
     const formaPagoId = Number(req.body.fk_idforma_pago || 0);
@@ -2934,7 +3258,7 @@ app.post("/vales", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/vales/:id", requireAuth, async (req, res) => {
+app.post("/vales/:id", requireAuth, requireEvent("vale-ocultar"), async (req, res) => {
   let fechaRedirect = req.body.fecha_pago || todayIso();
   try {
     const personalId = Number(req.body.fk_idpersonal || 0);
@@ -2974,7 +3298,7 @@ app.post("/vales/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/vales/:id/anular", requireAuth, async (req, res) => {
+app.post("/vales/:id/anular", requireAuth, requireEvent("vale-ocultar"), async (req, res) => {
   let fechaRedirect = req.body.fecha || todayIso();
   try {
     const creadoPor = currentUser(req);
@@ -3003,7 +3327,7 @@ app.post("/vales/:id/anular", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/gastos", requireAuth, async (req, res, next) => {
+app.get("/gastos", requireAuth, requireEvent("gasto-ocultar"), async (req, res, next) => {
   try {
     const fecha = req.query.fecha || todayIso();
     const editId = req.query.edit;
@@ -3035,7 +3359,7 @@ app.get("/gastos", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/gastos", requireAuth, requireItem("gasto-desabilitar"), async (req, res) => {
+app.post("/gastos", requireAuth, requireEvent("gasto-ocultar"), async (req, res) => {
   try {
     const gastoTipoId = Number(req.body.fk_idgasto_tipo || 0);
     const formaPagoId = Number(req.body.fk_idforma_pago || 0);
@@ -3059,7 +3383,7 @@ app.post("/gastos", requireAuth, requireItem("gasto-desabilitar"), async (req, r
   }
 });
 
-app.post("/gastos/:id", requireAuth, requireItem("gasto-desabilitar"), async (req, res) => {
+app.post("/gastos/:id", requireAuth, requireEvent("gasto-ocultar"), async (req, res) => {
   let fechaRedirect = req.body.fecha_gasto || todayIso();
   try {
     const gastoTipoId = Number(req.body.fk_idgasto_tipo || 0);
@@ -3095,7 +3419,7 @@ app.post("/gastos/:id", requireAuth, requireItem("gasto-desabilitar"), async (re
   }
 });
 
-app.post("/gastos/:id/anular", requireAuth, requireItem("gasto-desabilitar"), async (req, res) => {
+app.post("/gastos/:id/anular", requireAuth, requireEvent("gasto-ocultar"), async (req, res) => {
   let fechaRedirect = req.body.fecha || todayIso();
   try {
     const result = await query(`select * from gastos where id = $1`, [req.params.id]);
@@ -3482,11 +3806,13 @@ function crudRoutes(pathName, table, fields, title, authorization = {}) {
   const uploadMiddleware = crudUploadMiddleware(fields, pathName);
   const accessMiddleware = [
     requireAuth,
-    authorization.item ? requireItem(authorization.item) : null
+    authorization.accessEvent
+      ? requireEvent(authorization.accessEvent)
+      : (authorization.item ? requireItem(authorization.item) : null)
   ].filter(Boolean);
   const mutationMiddleware = [
     ...accessMiddleware,
-    authorization.event ? requireItem(authorization.event) : null
+    authorization.event ? requireEvent(authorization.event) : null
   ].filter(Boolean);
 
   app.get(`/${pathName}`, ...accessMiddleware, async (req, res, next) => {
@@ -3809,13 +4135,13 @@ crudRoutes("grupo-clientes", "grupo_cliente", [
   { name: "email", label: "Email", type: "email" },
   { name: "es_credito", label: "Es credito", type: "checkbox" },
   { name: "activo", label: "Activo", type: "checkbox" }
-], "Grupos de clientes");
+], "Grupos de clientes", { accessEvent: "grupo_cliente-ocultar" });
 
 crudRoutes("servicio-grupos", "servicio_grupo", [
   { name: "nombre", label: "Nombre", required: true },
   { name: "imagen", label: "Imagen PNG", type: "image" },
   { name: "activo", label: "Activo", type: "checkbox" }
-], "Grupos de servicios", { item: "servicio", event: "servicio-desabilitar" });
+], "Grupos de servicios", { item: "servicio", accessEvent: "servicio-ocultar" });
 
 crudRoutes("clientes", "clientes", [
   { name: "chapa", label: "Chapa", required: true, uppercase: true },
@@ -3827,20 +4153,20 @@ crudRoutes("clientes", "clientes", [
   { name: "email", label: "Email", type: "email" },
   { name: "fk_idgrupo_cliente", label: "Grupo cliente", type: "select", optionsTable: "grupo_cliente" },
   { name: "activo", label: "Activo", type: "checkbox" }
-], "Clientes");
+], "Clientes", { accessEvent: "cliente-ocultar" });
 
 crudRoutes("servicios", "servicios", [
   { name: "fk_idservicio_grupo", label: "Grupo servicio", type: "select", optionsTable: "servicio_grupo" },
   { name: "nombre", label: "Nombre", required: true },
   { name: "precio_base", label: "Precio base", type: "money", required: true },
   { name: "activo", label: "Activo", type: "checkbox" }
-], "Servicios", { item: "servicio", event: "servicio-desabilitar" });
+], "Servicios", { item: "servicio", accessEvent: "servicio-ocultar" });
 
 crudRoutes("personal", "personal", [
   { name: "nombre", label: "Nombre", required: true },
   { name: "telefono", label: "Telefono" },
   { name: "activo", label: "Activo", type: "checkbox" }
-], "Personal");
+], "Personal", { accessEvent: "personal-ocultar" });
 
 crudRoutes("gasto-tipos", "gasto_tipo", [
   { name: "nombre", label: "Nombre", required: true, uppercase: true },

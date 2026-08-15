@@ -13,7 +13,9 @@
     <input type="date" name="fecha" value="<%= fecha %>">
   </label>
   <button type="submit">Ver</button>
-  <a class="button secondary" href="/caja?fecha=<%= fecha %>">Ver caja</a>
+  <% if (canEvent('caja-ocultar')) { %>
+    <a class="button secondary" href="/caja?fecha=<%= fecha %>">Ver caja</a>
+  <% } %>
 </form>
 
 <section class="metrics">

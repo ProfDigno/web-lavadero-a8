@@ -3,7 +3,7 @@
 <% const entityLabel = pathName === 'clientes' ? 'cliente' : (pathName === 'servicios' ? 'servicio' : (pathName === 'servicio-grupos' ? 'grupo de servicio' : (pathName === 'personal' ? 'personal' : (pathName === 'grupo-clientes' ? 'grupo de cliente' : (pathName === 'formas-pago' ? 'forma de pago' : (pathName === 'gasto-tipos' ? 'tipo de gasto' : 'registro')))))); %>
 <% const newEntityLabel = pathName === 'formas-pago' ? 'Nueva forma de pago' : 'Nuevo ' + entityLabel; %>
 <% const serviceModule = ['servicios', 'servicio-grupos'].includes(pathName); %>
-<% const canMutate = !serviceModule || canItem('servicio-desabilitar'); %>
+<% const canMutate = !serviceModule || canEvent('servicio-ocultar'); %>
 <% const tableFields = pathName === 'clientes'
   ? ['chapa', 'marca_modelo', 'nombre', 'ruc', 'email', 'fk_idgrupo_cliente'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
   : pathName === 'grupo-clientes'

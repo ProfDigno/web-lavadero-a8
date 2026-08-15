@@ -499,6 +499,44 @@
     const saldoNode = valeSaldoBox.querySelector("[data-vale-saldo]");
     const comisionNode = valeSaldoBox.querySelector("[data-vale-comision]");
     const valesNode = valeSaldoBox.querySelector("[data-vale-vales]");
+    let saldoOptionsRequest = 0;
+
+    function restoreValeOptionNames() {
+      personalInput?.querySelectorAll("option:not([value=''])").forEach((option) => {
+        if (!option.dataset.personalName) option.dataset.personalName = option.textContent.trim();
+        option.textContent = option.dataset.personalName;
+      });
+    }
+
+    async function updateValeOptions() {
+      if (!personalInput) return;
+      const fecha = fechaInput?.value || "";
+      const options = [...personalInput.querySelectorAll("option:not([value=''])")];
+      options.forEach((option) => {
+        if (!option.dataset.personalName) option.dataset.personalName = option.textContent.trim();
+      });
+      if (!fecha) {
+        restoreValeOptionNames();
+        return;
+      }
+
+      const requestId = ++saldoOptionsRequest;
+      try {
+        const response = await fetch(`/vales/saldos?fecha=${encodeURIComponent(fecha)}`, {
+          headers: { Accept: "application/json" }
+        });
+        if (!response.ok) throw new Error("No se pudieron obtener los saldos.");
+        const data = await response.json();
+        if (requestId !== saldoOptionsRequest) return;
+        const saldos = new Map((data.saldos || []).map((item) => [String(item.idpersonal), Number(item.saldo_personal || 0)]));
+        options.forEach((option) => {
+          const saldo = saldos.get(String(option.value)) || 0;
+          option.textContent = `${option.dataset.personalName} — Saldo: ${formatGuarani(saldo)}`;
+        });
+      } catch (error) {
+        if (requestId === saldoOptionsRequest) restoreValeOptionNames();
+      }
+    }
 
     async function updateValeSaldo() {
       const personalId = personalInput?.value || "";
@@ -525,10 +563,17 @@
     }
 
     personalInput?.addEventListener("change", updateValeSaldo);
-    fechaInput?.addEventListener("change", updateValeSaldo);
-    document.querySelector("[data-open-crud-modal]")?.addEventListener("click", () => {
-      window.setTimeout(updateValeSaldo, 0);
+    fechaInput?.addEventListener("change", () => {
+      updateValeOptions();
+      updateValeSaldo();
     });
+    document.querySelector("[data-open-crud-modal]")?.addEventListener("click", () => {
+      window.setTimeout(() => {
+        updateValeOptions();
+        updateValeSaldo();
+      }, 0);
+    });
+    updateValeOptions();
     updateValeSaldo();
   }
 

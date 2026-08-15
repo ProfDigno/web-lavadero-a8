@@ -29,6 +29,55 @@ function normalizeDenominations(denominations) {
   });
 }
 
+function summarizeCajaMovimientos(movimientos, saldoInicialEfectivo = 0) {
+  const resumen = {
+    ingresos: 0,
+    egresos: 0,
+    neto: 0,
+    efectivoIngresos: 0,
+    efectivoEgresos: 0,
+    efectivoEsperado: money(saldoInicialEfectivo),
+    formas: []
+  };
+  const formas = new Map();
+
+  (movimientos || []).forEach((movement) => {
+    const amount = money(movement.monto);
+    const isIncome = movement.tipo === "INGRESO";
+    if (isIncome) resumen.ingresos += amount;
+    else resumen.egresos += amount;
+    if (String(movement.forma_pago_nombre || "").trim().toUpperCase() === "EFECTIVO") {
+      if (isIncome) resumen.efectivoIngresos += amount;
+      else resumen.efectivoEgresos += amount;
+    }
+
+    const key = String(movement.fk_idforma_pago);
+    if (!formas.has(key)) {
+      formas.set(key, {
+        fk_idforma_pago: movement.fk_idforma_pago,
+        forma_pago_nombre: movement.forma_pago_nombre,
+        forma_pago_icono: movement.forma_pago_icono,
+        forma_pago_color: movement.forma_pago_color,
+        ingresos: 0,
+        egresos: 0,
+        neto: 0
+      });
+    }
+    const forma = formas.get(key);
+    forma[isIncome ? "ingresos" : "egresos"] += amount;
+    forma.neto = money(forma.ingresos - forma.egresos);
+  });
+
+  resumen.ingresos = money(resumen.ingresos);
+  resumen.egresos = money(resumen.egresos);
+  resumen.neto = money(resumen.ingresos - resumen.egresos);
+  resumen.efectivoIngresos = money(resumen.efectivoIngresos);
+  resumen.efectivoEgresos = money(resumen.efectivoEgresos);
+  resumen.efectivoEsperado = money(resumen.efectivoEsperado + resumen.efectivoIngresos - resumen.efectivoEgresos);
+  resumen.formas = [...formas.values()].sort((a, b) => String(a.forma_pago_nombre).localeCompare(String(b.forma_pago_nombre)));
+  return resumen;
+}
+
 async function getCajaSesionAbierta(executor = { query }) {
   const result = await executor.query(
     `select cs.*, ua.nombre as abierta_por_nombre, uc.nombre as cerrada_por_nombre
@@ -334,5 +383,6 @@ module.exports = {
   getCajaMovimientosElegibles,
   getCajaSesion,
   getCajaSesionAbierta,
-  getCajaSesiones
+  getCajaSesiones,
+  summarizeCajaMovimientos
 };

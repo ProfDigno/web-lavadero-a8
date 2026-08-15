@@ -45,3 +45,5 @@ Usuario inicial:
 ## Modelo de datos
 
 El diagrama entidad-relación completo está disponible en [docs/diagrama-er.md](docs/diagrama-er.md), junto con una versión visual en PNG.
+
+Las reglas para permisos por roll y deshabilitación de pantallas están documentadas en [docs/permisos-por-roll.md](docs/permisos-por-roll.md).

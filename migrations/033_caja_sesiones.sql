@@ -104,7 +104,10 @@ create table if not exists caja_sesion_movimientos (
   referencia varchar(120),
   descripcion varchar(250),
   constraint caja_sesion_movimientos_un_origen_check check (
-    num_nonnulls(fk_idlavado, fk_idgrupo_cliente_creditos, fk_idgasto, fk_idvales_personal) = 1
+    (case when fk_idlavado is not null then 1 else 0 end
+     + case when fk_idgrupo_cliente_creditos is not null then 1 else 0 end
+     + case when fk_idgasto is not null then 1 else 0 end
+     + case when fk_idvales_personal is not null then 1 else 0 end) = 1
   ),
   constraint caja_sesion_movimientos_origen_tipo_check check (
     (origen = 'LAVADO' and tipo = 'INGRESO' and fk_idlavado is not null
