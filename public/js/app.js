@@ -21,6 +21,33 @@
     navToggle.addEventListener("click", toggleNavigation);
     mainNavigation.querySelectorAll("a").forEach((link) => link.addEventListener("click", closeNavigation));
 
+    const navMenus = Array.from(mainNavigation.querySelectorAll("details.nav-menu"));
+
+    function positionOpenSubmenus() {
+      if (!window.matchMedia("(min-width: 1000px)").matches) return;
+      navMenus.forEach((menu) => {
+        if (!menu.open) return;
+        const summary = menu.querySelector("summary");
+        const submenu = menu.querySelector(".nav-submenu");
+        if (!summary || !submenu) return;
+        const rect = summary.getBoundingClientRect();
+        submenu.style.setProperty("--submenu-top", `${Math.max(12, rect.top)}px`);
+        submenu.style.setProperty("--submenu-left", `${rect.right + 10}px`);
+      });
+    }
+
+    navMenus.forEach((menu) => {
+      menu.addEventListener("toggle", () => {
+        if (!menu.open) return;
+        window.requestAnimationFrame(() => {
+          positionOpenSubmenus();
+        });
+      });
+    });
+
+    window.addEventListener("resize", positionOpenSubmenus);
+    mainNavigation.addEventListener("scroll", positionOpenSubmenus, { passive: true });
+
     document.addEventListener("click", (event) => {
       if (navToggle.getAttribute("aria-expanded") !== "true") return;
       if (!mainNavigation.contains(event.target) && !navToggle.contains(event.target)) closeNavigation();
