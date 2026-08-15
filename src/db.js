@@ -4,6 +4,10 @@ const config = require("./config");
 const pool = new Pool(config.db);
 
 const TABLE_PRIMARY_KEYS = {
+  caja_sesion_denominaciones: "idcaja_sesion_denominacion",
+  caja_sesion_formas_pago: "idcaja_sesion_forma_pago",
+  caja_sesion_movimientos: "idcaja_sesion_movimiento",
+  caja_sesiones: "idcaja_sesion",
   clientes: "idcliente",
   comisiones_diarias: "idcomisiones_diarias",
   factura_items: "idfactura_items",
