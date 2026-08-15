@@ -41,3 +41,7 @@ Usuario inicial:
 2. Cargar servicios.
 3. Opcionalmente cargar grupos de cliente.
 4. Registrar lavados desde la pantalla Lavados.
+
+## Modelo de datos
+
+El diagrama entidad-relación completo está disponible en [docs/diagrama-er.md](docs/diagrama-er.md), junto con una versión visual en PNG.
