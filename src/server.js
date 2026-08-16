@@ -208,6 +208,13 @@ function requireEvent(code) {
   return requirePermission("eventos", code);
 }
 
+function requireFacturaCreationPermission(req, res, next) {
+  const linkedToLavado = req.method === "GET"
+    ? Boolean(req.query.fk_idlavado)
+    : Boolean(req.body && req.body.fk_idlavado);
+  return requireEvent(linkedToLavado ? "factura-ocultar" : "factura_libre-ocultar")(req, res, next);
+}
+
 function currentUser(req) {
   return req.session.user ? req.session.user.nombre : "Sistema";
 }
@@ -1810,7 +1817,7 @@ app.get("/clientes/buscar", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/facturas/ruc", requireAuth, async (req, res) => {
+app.get("/facturas/ruc", requireAuth, requireEvent("factura-ocultar"), async (req, res) => {
   const ruc = normalizeRucInput(req.query.ruc);
   if (!ruc || !isBasicRuc(ruc)) {
     return res.status(400).json({ found: false, message: "Ingrese un RUC valido." });
@@ -1855,7 +1862,7 @@ app.get("/facturas/ruc", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/facturasend/config", requireAuth, async (req, res, next) => {
+app.get("/facturasend/config", requireAuth, requireEvent("config_facturasend-ocultar"), async (req, res, next) => {
   try {
     const configRow = await getFacturaSendConfig();
     res.render("facturasend/config", {
@@ -1868,7 +1875,7 @@ app.get("/facturasend/config", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/facturasend/config/import", requireAuth, async (req, res) => {
+app.post("/facturasend/config/import", requireAuth, requireEvent("config_facturasend-ocultar"), async (req, res) => {
   try {
     const manualUrl = String(req.body.base_url || "").trim();
     const manualTenant = String(req.body.tenant || "").trim();
@@ -1909,7 +1916,7 @@ app.post("/facturasend/config/import", requireAuth, async (req, res) => {
   res.redirect("/facturasend/config");
 });
 
-app.post("/facturasend/config/test", requireAuth, async (req, res) => {
+app.post("/facturasend/config/test", requireAuth, requireEvent("config_facturasend-ocultar"), async (req, res) => {
   try {
     const configRow = await getFacturaSendConfig();
     if (!configRow) throw new Error("Importe primero la configuracion de FacturaSend.");
@@ -1921,7 +1928,7 @@ app.post("/facturasend/config/test", requireAuth, async (req, res) => {
   res.redirect("/facturasend/config");
 });
 
-app.post("/facturas/:id/electronica/emitir", requireAuth, async (req, res) => {
+app.post("/facturas/:id/electronica/emitir", requireAuth, requireEvent("factura-ocultar"), async (req, res) => {
   try {
     const configRow = await getFacturaSendConfig();
     if (!configRow) throw new Error("Importe primero la configuracion de FacturaSend.");
@@ -1975,7 +1982,7 @@ app.post("/facturas/:id/electronica/emitir", requireAuth, async (req, res) => {
   res.redirect(`/facturas/${req.params.id}/editar`);
 });
 
-app.post("/facturas/:id/electronica/estado", requireAuth, async (req, res) => {
+app.post("/facturas/:id/electronica/estado", requireAuth, requireEvent("factura-ocultar"), async (req, res) => {
   try {
     const configRow = await getFacturaSendConfig();
     if (!configRow) throw new Error("Importe primero la configuracion de FacturaSend.");
@@ -2012,7 +2019,7 @@ app.post("/facturas/:id/electronica/estado", requireAuth, async (req, res) => {
   res.redirect(`/facturas/${req.params.id}/editar`);
 });
 
-app.get("/facturas/:id/electronica/kude", requireAuth, async (req, res, next) => {
+app.get("/facturas/:id/electronica/kude", requireAuth, requireEvent("factura-ocultar"), async (req, res, next) => {
   try {
     const configRow = await getFacturaSendConfig();
     if (!configRow) throw new Error("Importe primero la configuracion de FacturaSend.");
@@ -2038,7 +2045,7 @@ app.get("/facturas/:id/electronica/kude", requireAuth, async (req, res, next) =>
   }
 });
 
-app.get("/facturas", requireAuth, async (req, res, next) => {
+app.get("/facturas", requireAuth, requireEvent("factura-ocultar"), async (req, res, next) => {
   try {
     const fecha = req.query.fecha || "";
     const params = [];
@@ -2060,7 +2067,7 @@ app.get("/facturas", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/facturas/nueva", requireAuth, async (req, res, next) => {
+app.get("/facturas/nueva", requireAuth, requireFacturaCreationPermission, async (req, res, next) => {
   try {
     const lavadoId = req.query.fk_idlavado;
     const data = lavadoId
@@ -2095,7 +2102,7 @@ app.get("/facturas/nueva", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/facturas", requireAuth, async (req, res) => {
+app.post("/facturas", requireAuth, requireFacturaCreationPermission, async (req, res) => {
   try {
     const facturaId = await saveFactura(req);
     setFlash(req, "success", "Factura guardada correctamente.");
@@ -2106,7 +2113,7 @@ app.post("/facturas", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/facturas/:id/editar", requireAuth, async (req, res, next) => {
+app.get("/facturas/:id/editar", requireAuth, requireEvent("factura-ocultar"), async (req, res, next) => {
   try {
     const data = await getFacturaById(req.params.id);
     if (!data) return res.status(404).render("error", { title: "No encontrado", message: "Factura no encontrada." });
@@ -2123,7 +2130,7 @@ app.get("/facturas/:id/editar", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/facturas/:id", requireAuth, async (req, res) => {
+app.post("/facturas/:id", requireAuth, requireEvent("factura-ocultar"), async (req, res) => {
   try {
     const facturaId = await saveFactura(req, req.params.id);
     setFlash(req, "success", "Factura actualizada correctamente.");
@@ -2134,7 +2141,7 @@ app.post("/facturas/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/facturas/:id/pdf", requireAuth, async (req, res, next) => {
+app.get("/facturas/:id/pdf", requireAuth, requireEvent("factura-ocultar"), async (req, res, next) => {
   try {
     const data = await getFacturaById(req.params.id);
     if (!data) return res.status(404).render("error", { title: "No encontrado", message: "Factura no encontrada." });

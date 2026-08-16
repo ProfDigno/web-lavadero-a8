@@ -33,6 +33,9 @@
     <% const showUsuario = canEvent('usuario-ocultar'); %>
     <% const showUsuarioRoll = canEvent('usuario_roll-ocultar'); %>
     <% const showUsuarioEvento = canEvent('usuario_evento-ocultar'); %>
+    <% const showFactura = canEvent('factura-ocultar'); %>
+    <% const showFacturaLibre = canEvent('factura_libre-ocultar'); %>
+    <% const showFacturaSend = canEvent('config_facturasend-ocultar'); %>
     <nav class="nav" id="main-navigation" aria-label="Navegación principal">
       <a href="/"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-7h6v7"/></svg></span>Inicio</a>
       <details class="nav-menu">
@@ -106,9 +109,9 @@
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>Factura</summary>
         <div class="nav-submenu">
-          <a href="/facturas">Facturas</a>
-          <a href="/facturas/nueva">Nueva factura libre</a>
-          <a href="/facturasend/config">Configuracion electronica</a>
+          <% if (showFactura) { %><a href="/facturas">Facturas</a><% } %>
+          <% if (showFacturaLibre) { %><a href="/facturas/nueva">Nueva factura libre</a><% } %>
+          <% if (showFacturaSend) { %><a href="/facturasend/config">Configuracion electronica</a><% } %>
         </div>
       </details>
       <details class="nav-menu">

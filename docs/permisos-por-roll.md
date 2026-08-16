@@ -48,6 +48,9 @@ Los eventos de ocultación disponibles actualmente son:
 - `usuario-ocultar`: Administración de usuarios.
 - `usuario_roll-ocultar`: Administración de rolls.
 - `usuario_evento-ocultar`: Administración de eventos.
+- `factura-ocultar`: Facturas y operaciones sobre facturas existentes.
+- `factura_libre-ocultar`: Nueva factura libre.
+- `config_facturasend-ocultar`: Configuración electrónica de FacturaSend.
 
 En el menú Cliente, los permisos individuales son:
 
@@ -78,7 +81,15 @@ El menú Usuarios contiene tres permisos independientes:
 - `usuario_roll-ocultar`: `Usuarios > Roll`, rutas `/usuario-roll` y cambios de ítems.
 - `usuario_evento-ocultar`: `Usuarios > Evento`, rutas `/usuario-roll-eventos`.
 
-El menú Usuarios desaparece cuando sus tres opciones están deshabilitadas. Factura no tiene actualmente un evento de ocultación.
+El menú Usuarios desaparece cuando sus tres opciones están deshabilitadas.
+
+El menú Factura contiene tres opciones independientes:
+
+- `factura-ocultar`: muestra `Facturas` y protege `/facturas`, la consulta de RUC, la edición, el PDF y las operaciones electrónicas de facturas existentes. También controla la facturación iniciada desde un lavado mediante `/facturas/nueva?fk_idlavado=...`.
+- `factura_libre-ocultar`: muestra `Nueva factura libre` y protege `/facturas/nueva` sin `fk_idlavado`, además de la creación enviada sin lavado.
+- `config_facturasend-ocultar`: muestra `Configuracion electronica` y protege `/facturasend/config`, la importación y la prueba de conexión.
+
+El menú Factura desaparece cuando sus tres permisos están deshabilitados. La ruta compartida `POST /facturas` selecciona el permiso según la solicitud: si contiene `fk_idlavado`, usa `factura-ocultar`; de lo contrario, usa `factura_libre-ocultar`.
 
 Ejemplo de ruta:
 
@@ -147,6 +158,27 @@ Los códigos disponibles son `personal-ocultar`, `analisis_personal-ocultar`, `v
 
 Los nuevos permisos de Configuración y Usuarios se administran con los mismos códigos:
 `pagos-ocultar`, `usuario-ocultar`, `usuario_roll-ocultar` y `usuario_evento-ocultar`.
+
+Los permisos de Facturación se administran con `factura-ocultar`, `factura_libre-ocultar` y `config_facturasend-ocultar`. Por ejemplo, para deshabilitar las tres opciones a un roll:
+
+```sql
+update usuario_roll_item uri
+set activo = false
+from usuario_roll_evento ure
+where uri.fk_idusuario_roll_evento = ure.idusuario_roll_evento
+  and ure.codigo_evento = any(array[
+    'factura-ocultar',
+    'factura_libre-ocultar',
+    'config_facturasend-ocultar'
+  ])
+  and uri.fk_idusuario_roll = (
+    select idusuario_roll
+    from usuario_roll
+    where roll = 'CAJERO'
+  );
+```
+
+Para volver a habilitarlos, reemplazar `activo = false` por `activo = true`. También se puede actualizar un solo código cambiando la lista `any(array[...])` por `ure.codigo_evento = 'factura-ocultar'`, `ure.codigo_evento = 'factura_libre-ocultar'` o `ure.codigo_evento = 'config_facturasend-ocultar'`.
 
 Para deshabilitar los cuatro permisos para un roll específico:
 
