@@ -8,13 +8,13 @@ Las pantallas que puedan mostrarse u ocultarse por rol deben usar el modelo de e
 - `usuario_roll_item`: asigna el evento a cada roll y guarda su estado particular.
 - `usuarios.fk_idusuario_roll`: relaciona el usuario con su roll.
 
-El estado que decide si un usuario puede ejecutar el evento es:
+El estado específico del roll que decide si un usuario puede ejecutar y ver el evento es:
 
 ```text
 usuario_roll_item.activo
 ```
 
-`usuario_roll_evento.activo` identifica si el evento global está disponible, pero no reemplaza la configuración específica del roll. La aplicación debe usar `usuario_roll_item.activo` para resolver `canEvent()` y `requireEvent()`.
+`usuario_roll_evento.activo` identifica si el evento global está disponible. `usuario_roll_item.activo` guarda la configuración específica de cada roll y es el estado que se debe respetar al construir el menú y validar el acceso. La aplicación usa `canEvent()` para la interfaz y `requireEvent()` para las rutas protegidas.
 
 ## Patrón de implementación
 
@@ -24,9 +24,30 @@ Para una pantalla protegida, por ejemplo Caja:
 2. Asignarlo a los rolls mediante `usuario_roll_item`.
 3. Usar `canEvent('caja-ocultar')` para mostrar u ocultar enlaces y botones.
 4. Usar `requireEvent('caja-ocultar')` en la ruta para impedir el acceso directo.
-5. Cuando el permiso sea falso, mostrar el enlace en estado visual oculto o gris y tachado si se necesita conservarlo visible.
+5. Cuando el permiso sea falso, no renderizar el enlace en el menú.
+
+Si todas las opciones de un submenú están deshabilitadas, tampoco se debe renderizar el título del menú padre. Esto evita mostrar menús vacíos y mantiene la navegación limpia.
 
 El mismo patrón se aplica a `cierre_caja-ocultar` para proteger la apertura, el cierre, el detalle y los PDFs de Cierre de caja.
+
+Los eventos de ocultación disponibles actualmente son:
+
+- `AnalisisLavado-ocultar`: Análisis general de lavados.
+- `caja-ocultar`: Caja.
+- `cierre_caja-ocultar`: Cierre de caja.
+- `cliente-ocultar`: Cliente.
+- `grupo_cliente-ocultar`: Grupo de cliente.
+- `credito_grupo-ocultar`: Crédito por grupo.
+- `servicio-ocultar`: Servicios y grupos de servicios.
+- `personal-ocultar`: Personal.
+- `analisis_personal-ocultar`: Análisis de personal.
+- `vale-ocultar`: Vales.
+- `comisiones-ocultar`: Comisiones.
+- `gasto-ocultar`: Gastos.
+- `pagos-ocultar`: Configuración de formas de pago.
+- `usuario-ocultar`: Administración de usuarios.
+- `usuario_roll-ocultar`: Administración de rolls.
+- `usuario_evento-ocultar`: Administración de eventos.
 
 En el menú Cliente, los permisos individuales son:
 
@@ -34,7 +55,7 @@ En el menú Cliente, los permisos individuales son:
 - `grupo_cliente-ocultar`: Grupo de cliente.
 - `credito_grupo-ocultar`: Crédito por grupo.
 
-El menú Cliente permanece visible aunque uno de sus enlaces esté oculto. El endpoint interno `/clientes/buscar` permanece disponible para la selección de clientes en lavados.
+Cada enlace se renderiza solo si su permiso está activo. El menú Cliente desaparece si los tres permisos están inactivos. El endpoint interno `/clientes/buscar` permanece disponible para la selección de clientes en lavados.
 
 En el menú Personal, los permisos también son individuales:
 
@@ -43,7 +64,21 @@ En el menú Personal, los permisos también son individuales:
 - `vale-ocultar`: emisión, edición y anulación de Vales.
 - `comisiones-ocultar`: resumen de Comisiones.
 
-El menú Personal permanece visible aunque uno de sus enlaces esté oculto. Cada pantalla se protege con su propio evento.
+Cada enlace se renderiza solo si su permiso está activo. El menú Personal desaparece si sus cuatro permisos están inactivos. Cada pantalla se protege con su propio evento.
+
+El menú Servicio se muestra únicamente cuando `servicio-ocultar` está activo y contiene las opciones Servicios y Grupos de servicios. El menú Gasto siempre conserva `Gasto tipo`; la opción Gasto depende de `gasto-ocultar`.
+
+El menú de configuración contiene:
+
+- `pagos-ocultar`: `Configuración > Pagos`, con la ruta `/formas-pago`.
+
+El menú Usuarios contiene tres permisos independientes:
+
+- `usuario-ocultar`: `Usuarios > Usuario`, rutas `/usuarios`.
+- `usuario_roll-ocultar`: `Usuarios > Roll`, rutas `/usuario-roll` y cambios de ítems.
+- `usuario_evento-ocultar`: `Usuarios > Evento`, rutas `/usuario-roll-eventos`.
+
+El menú Usuarios desaparece cuando sus tres opciones están deshabilitadas. Factura no tiene actualmente un evento de ocultación.
 
 Ejemplo de ruta:
 
@@ -56,14 +91,10 @@ Ejemplo de vista:
 ```ejs
 <% if (canEvent('caja-ocultar')) { %>
   <a href="/caja">Caja</a>
-<% } else { %>
-  <a class="nav-link-disabled" href="/caja" aria-disabled="true">
-    Caja
-  </a>
 <% } %>
 ```
 
-La protección de la ruta es obligatoria aunque el enlace esté oculto o tachado.
+La protección de la ruta es obligatoria aunque el enlace no se renderice en el menú.
 
 ## Activar o desactivar por roll
 
@@ -114,6 +145,31 @@ where uri.fk_idusuario_roll_evento = ure.idusuario_roll_evento
 
 Los códigos disponibles son `personal-ocultar`, `analisis_personal-ocultar`, `vale-ocultar` y `comisiones-ocultar`. Para activar nuevamente un permiso, se reemplaza `activo = false` por `activo = true`.
 
+Los nuevos permisos de Configuración y Usuarios se administran con los mismos códigos:
+`pagos-ocultar`, `usuario-ocultar`, `usuario_roll-ocultar` y `usuario_evento-ocultar`.
+
+Para deshabilitar los cuatro permisos para un roll específico:
+
+```sql
+update usuario_roll_item uri
+set activo = false
+from usuario_roll_evento ure
+where uri.fk_idusuario_roll_evento = ure.idusuario_roll_evento
+  and ure.codigo_evento = any(array[
+    'pagos-ocultar',
+    'usuario-ocultar',
+    'usuario_roll-ocultar',
+    'usuario_evento-ocultar'
+  ])
+  and uri.fk_idusuario_roll = (
+    select idusuario_roll
+    from usuario_roll
+    where roll = 'CAJERO'
+  );
+```
+
+Para habilitarlos nuevamente, reemplazar `activo = false` por `activo = true`.
+
 También se puede modificar desde la pantalla de administración de rolls y eventos.
 
 ## Migraciones futuras
@@ -159,6 +215,7 @@ order by ur.roll;
 Debe comprobarse que:
 
 - `permiso_activo` controle el acceso del roll.
-- El enlace respete el estado del permiso.
+- El enlace no se renderice cuando el permiso sea falso.
+- El menú padre desaparezca cuando no tenga subopciones visibles.
 - La ruta protegida responda con acceso bloqueado cuando el permiso sea falso.
 - Las migraciones repetidas no modifiquen permisos existentes.

@@ -364,6 +364,10 @@ button.link {
   flex: 0 0 auto;
 }
 
+.nav-menu:not(:has(.nav-submenu a)) {
+  display: none;
+}
+
 .nav-menu summary {
   display: flex;
   align-items: center;

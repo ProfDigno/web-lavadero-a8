@@ -3445,7 +3445,7 @@ app.post("/gastos/:id/anular", requireAuth, requireEvent("gasto-ocultar"), async
   }
 });
 
-app.get("/usuarios", requireAuth, async (req, res, next) => {
+app.get("/usuarios", requireAuth, requireEvent("usuario-ocultar"), async (req, res, next) => {
   try {
     const editId = req.query.edit;
     const [usuarios, editItem, rolls] = await Promise.all([
@@ -3481,7 +3481,7 @@ app.get("/usuarios", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/usuarios", requireAuth, async (req, res) => {
+app.post("/usuarios", requireAuth, requireEvent("usuario-ocultar"), async (req, res) => {
   try {
     const passwordHash = await bcrypt.hash(req.body.password || "", 10);
     const rollId = req.body.fk_idusuario_roll ? Number(req.body.fk_idusuario_roll) : null;
@@ -3508,7 +3508,7 @@ app.post("/usuarios", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/usuarios/:id", requireAuth, async (req, res) => {
+app.post("/usuarios/:id", requireAuth, requireEvent("usuario-ocultar"), async (req, res) => {
   try {
     const values = [
       String(req.body.login || "").trim(),
@@ -3554,7 +3554,7 @@ app.post("/usuarios/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/usuarios/:id/toggle", requireAuth, async (req, res, next) => {
+app.post("/usuarios/:id/toggle", requireAuth, requireEvent("usuario-ocultar"), async (req, res, next) => {
   try {
     if (Number(req.params.id) === Number(req.session.user.id)) {
       setFlash(req, "error", "No puede desactivar su propio usuario.");
@@ -3568,7 +3568,7 @@ app.post("/usuarios/:id/toggle", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/usuario-roll", requireAuth, async (req, res, next) => {
+app.get("/usuario-roll", requireAuth, requireEvent("usuario_roll-ocultar"), async (req, res, next) => {
   try {
     const editRoleId = req.query.edit || req.query.edit_role;
     const [roles, items, eventos, editRole] = await Promise.all([
@@ -3603,7 +3603,7 @@ app.get("/usuario-roll", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/usuario-roll", requireAuth, async (req, res) => {
+app.post("/usuario-roll", requireAuth, requireEvent("usuario_roll-ocultar"), async (req, res) => {
   try {
     const creadoPor = currentUser(req);
     await withTransaction(async (client) => {
@@ -3631,7 +3631,7 @@ app.post("/usuario-roll", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/usuario-roll/:id", requireAuth, async (req, res) => {
+app.post("/usuario-roll/:id", requireAuth, requireEvent("usuario_roll-ocultar"), async (req, res) => {
   try {
     await query(
       `update usuario_roll set roll = $1, activo = $2 where idusuario_roll = $3`,
@@ -3645,7 +3645,7 @@ app.post("/usuario-roll/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/usuario-roll/:id/toggle", requireAuth, async (req, res, next) => {
+app.post("/usuario-roll/:id/toggle", requireAuth, requireEvent("usuario_roll-ocultar"), async (req, res, next) => {
   try {
     await query(`update usuario_roll set activo = not activo where idusuario_roll = $1`, [req.params.id]);
     setFlash(req, "success", "Estado del roll actualizado.");
@@ -3655,7 +3655,7 @@ app.post("/usuario-roll/:id/toggle", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/usuario-roll-item/:id/toggle", requireAuth, async (req, res, next) => {
+app.post("/usuario-roll-item/:id/toggle", requireAuth, requireEvent("usuario_roll-ocultar"), async (req, res, next) => {
   try {
     await query(`update usuario_roll_item set activo = not activo where idusuario_roll_item = $1`, [req.params.id]);
     setFlash(req, "success", "Estado del ítem actualizado.");
@@ -3665,7 +3665,7 @@ app.post("/usuario-roll-item/:id/toggle", requireAuth, async (req, res, next) =>
   }
 });
 
-app.get("/usuario-roll-eventos", requireAuth, async (req, res, next) => {
+app.get("/usuario-roll-eventos", requireAuth, requireEvent("usuario_evento-ocultar"), async (req, res, next) => {
   try {
     const [eventos, editEvento] = await Promise.all([
       query(
@@ -3692,7 +3692,7 @@ app.get("/usuario-roll-eventos", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/usuario-roll-eventos", requireAuth, async (req, res) => {
+app.post("/usuario-roll-eventos", requireAuth, requireEvent("usuario_evento-ocultar"), async (req, res) => {
   try {
     const creadoPor = currentUser(req);
     await withTransaction(async (client) => {
@@ -3727,7 +3727,7 @@ app.post("/usuario-roll-eventos", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/usuario-roll-eventos/:id", requireAuth, async (req, res) => {
+app.post("/usuario-roll-eventos/:id", requireAuth, requireEvent("usuario_evento-ocultar"), async (req, res) => {
   try {
     await query(
       `update usuario_roll_evento set descripcion = $1, activo = $2 where idusuario_roll_evento = $3`,
@@ -3741,7 +3741,7 @@ app.post("/usuario-roll-eventos/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/usuario-roll-eventos/:id/toggle", requireAuth, async (req, res, next) => {
+app.post("/usuario-roll-eventos/:id/toggle", requireAuth, requireEvent("usuario_evento-ocultar"), async (req, res, next) => {
   try {
     await query(`update usuario_roll_evento set activo = not activo where idusuario_roll_evento = $1`, [req.params.id]);
     setFlash(req, "success", "Estado del evento actualizado.");
@@ -4179,7 +4179,7 @@ crudRoutes("formas-pago", "formas_pago", [
   { name: "color", label: "Color", type: "color" },
   { name: "mostrar_despues_crear", label: "Mostrar despues de crear", type: "checkbox" },
   { name: "activo", label: "Activo", type: "checkbox" }
-], "Formas de pago");
+], "Formas de pago", { accessEvent: "pagos-ocultar" });
 
 app.use((req, res) => {
   res.status(404).render("error", { title: "No encontrado", message: "Pagina no encontrada." });
