@@ -4,42 +4,13 @@
     <h1>Eventos</h1>
     <p>Acciones disponibles para cada roll</p>
   </div>
-  <a class="button secondary" href="/usuario-roll">Administrar roll</a>
+  <div class="actions">
+    <a class="button secondary" href="/usuario-roll">Administrar roll</a>
+    <button type="button" data-open-crud-modal>Nuevo evento</button>
+  </div>
 </div>
 
-<section class="grid two">
-  <form class="panel stack" method="post" action="/usuario-roll-eventos<%= editEvento ? '/' + editEvento.id : '' %>">
-    <h2><%= editEvento ? 'Editar evento' : 'Nuevo evento' %></h2>
-    <label>
-      Nombre
-      <% if (editEvento) { %>
-        <input value="<%= editEvento.nombre %>" readonly>
-      <% } else { %>
-        <input name="nombre" required value="" placeholder="Ejemplo: Bloquear servicio">
-      <% } %>
-    </label>
-    <label>
-      Código del evento
-      <% if (editEvento) { %>
-        <input value="<%= editEvento.codigo_evento %>" readonly>
-      <% } else { %>
-        <input name="codigo_evento" required value="" placeholder="Ejemplo: servicio-bloqueo">
-      <% } %>
-    </label>
-    <label>
-      Descripción
-      <textarea name="descripcion" rows="3"><%= editEvento ? (editEvento.descripcion || '') : '' %></textarea>
-    </label>
-    <label class="check">
-      <input type="checkbox" name="activo" <%= editEvento ? (editEvento.activo ? 'checked' : '') : 'checked' %>>
-      <span>Activo</span>
-    </label>
-    <div class="actions">
-      <button type="submit"><%= editEvento ? 'Guardar cambios' : 'Crear evento' %></button>
-      <% if (editEvento) { %><a class="button secondary" href="/usuario-roll-eventos">Cancelar</a><% } %>
-    </div>
-  </form>
-
+<section class="grid one">
   <div class="crud-list-panel" data-crud-search-scope>
     <div class="crud-searchbar">
       <label>
@@ -81,4 +52,44 @@
     </div>
   </div>
 </section>
+
+<div class="modal-backdrop <%= editEvento ? '' : 'is-hidden' %>" data-crud-modal>
+  <form
+    class="modal-panel crud-modal-panel stack"
+    method="post"
+    action="/usuario-roll-eventos<%= editEvento ? '/' + editEvento.id : '' %>"
+    data-crud-modal-form
+    data-create-action="/usuario-roll-eventos"
+    data-new-title="Nuevo evento">
+    <h2 data-crud-modal-title><%= editEvento ? 'Editar evento' : 'Nuevo evento' %></h2>
+    <label>
+      Nombre
+      <% if (editEvento) { %>
+        <input value="<%= editEvento.nombre %>" readonly>
+      <% } else { %>
+        <input name="nombre" required value="" placeholder="Ejemplo: Bloquear servicio">
+      <% } %>
+    </label>
+    <label>
+      Código del evento
+      <% if (editEvento) { %>
+        <input value="<%= editEvento.codigo_evento %>" readonly>
+      <% } else { %>
+        <input name="codigo_evento" required value="" placeholder="Ejemplo: servicio-bloqueo">
+      <% } %>
+    </label>
+    <label>
+      Descripción
+      <textarea name="descripcion" rows="3"><%= editEvento ? (editEvento.descripcion || '') : '' %></textarea>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="activo" <%= editEvento ? (editEvento.activo ? 'checked' : '') : 'checked' %>>
+      <span>Activo</span>
+    </label>
+    <div class="modal-actions">
+      <button type="submit"><%= editEvento ? 'Guardar cambios' : 'Crear evento' %></button>
+      <button type="button" class="secondary" data-close-crud-modal>Cancelar</button>
+    </div>
+  </form>
+</div>
 <%- include('partials/footer') %>
