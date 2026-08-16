@@ -420,26 +420,6 @@ button.link {
   color: var(--primary-dark);
 }
 
-.nav-submenu a.nav-link-disabled,
-.nav-submenu a.nav-link-disabled:hover,
-.nav-submenu a.nav-link-disabled:focus {
-  color: #9aa6b2;
-  background: #f7f8fa;
-  cursor: not-allowed;
-  text-decoration: line-through;
-  transform: none;
-}
-
-.nav > a.nav-link-disabled,
-.nav > a.nav-link-disabled:hover,
-.nav > a.nav-link-disabled:focus {
-  color: #9aa6b2;
-  background: #f7f8fa;
-  cursor: not-allowed;
-  text-decoration: line-through;
-  transform: none;
-}
-
 .role-select-row,
 .role-item-row {
   cursor: pointer;
