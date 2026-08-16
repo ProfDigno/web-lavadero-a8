@@ -4178,7 +4178,7 @@ crudRoutes("personal", "personal", [
 crudRoutes("gasto-tipos", "gasto_tipo", [
   { name: "nombre", label: "Nombre", required: true, uppercase: true },
   { name: "activo", label: "Activo", type: "checkbox" }
-], "Gastos tipo");
+], "Gastos tipo", { accessEvent: "gasto_tipo-ocultar" });
 
 crudRoutes("formas-pago", "formas_pago", [
   { name: "nombre", label: "Nombre", required: true, uppercase: true },

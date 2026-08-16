@@ -29,6 +29,7 @@
     <% const showVale = canEvent('vale-ocultar'); %>
     <% const showComisiones = canEvent('comisiones-ocultar'); %>
     <% const showGasto = canEvent('gasto-ocultar'); %>
+    <% const showGastoTipo = canEvent('gasto_tipo-ocultar'); %>
     <% const showPagos = canEvent('pagos-ocultar'); %>
     <% const showUsuario = canEvent('usuario-ocultar'); %>
     <% const showUsuarioRoll = canEvent('usuario_roll-ocultar'); %>
@@ -97,15 +98,19 @@
         </div>
       </details>
       <% } %>
+      <% if (showGasto || showGastoTipo) { %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM7 7V5h10v2M8 11h8M8 15h5"/></svg></span>Gasto</summary>
         <div class="nav-submenu">
-          <a href="/gasto-tipos">Gasto tipo</a>
+          <% if (showGastoTipo) { %>
+            <a href="/gasto-tipos">Gasto tipo</a>
+          <% } %>
           <% if (showGasto) { %>
             <a href="/gastos">Gasto</a>
           <% } %>
         </div>
       </details>
+      <% } %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>Factura</summary>
         <div class="nav-submenu">

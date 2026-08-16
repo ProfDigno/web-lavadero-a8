@@ -44,6 +44,7 @@ Los eventos de ocultación disponibles actualmente son:
 - `vale-ocultar`: Vales.
 - `comisiones-ocultar`: Comisiones.
 - `gasto-ocultar`: Gastos.
+- `gasto_tipo-ocultar`: Administración de tipos de gasto.
 - `pagos-ocultar`: Configuración de formas de pago.
 - `usuario-ocultar`: Administración de usuarios.
 - `usuario_roll-ocultar`: Administración de rolls.
@@ -69,7 +70,7 @@ En el menú Personal, los permisos también son individuales:
 
 Cada enlace se renderiza solo si su permiso está activo. El menú Personal desaparece si sus cuatro permisos están inactivos. Cada pantalla se protege con su propio evento.
 
-El menú Servicio se muestra únicamente cuando `servicio-ocultar` está activo y contiene las opciones Servicios y Grupos de servicios. El menú Gasto siempre conserva `Gasto tipo`; la opción Gasto depende de `gasto-ocultar`.
+El menú Servicio se muestra únicamente cuando `servicio-ocultar` está activo y contiene las opciones Servicios y Grupos de servicios. En el menú Gasto, `gasto_tipo-ocultar` controla `Gasto tipo` y `gasto-ocultar` controla `Gasto`; el menú desaparece si ambos permisos están deshabilitados.
 
 El menú de configuración contiene:
 
@@ -106,6 +107,8 @@ Ejemplo de vista:
 ```
 
 La protección de la ruta es obligatoria aunque el enlace no se renderice en el menú.
+
+La opción `Gasto tipo` y todas las operaciones de `/gasto-tipos` requieren `gasto_tipo-ocultar`.
 
 ## Activar o desactivar por roll
 
