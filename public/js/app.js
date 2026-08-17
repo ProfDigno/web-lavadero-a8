@@ -1224,6 +1224,37 @@
     });
   }
 
+  const anularForm = document.querySelector("[data-anular-form]");
+  const anularModal = document.querySelector("[data-anular-modal]");
+  if (anularForm && anularModal) {
+    const anularConfirm = anularModal.querySelector("[data-anular-modal-confirm]");
+    const anularCancel = anularModal.querySelectorAll("[data-anular-modal-cancel]");
+    let pendingAnularForm = null;
+
+    function closeAnularModal() {
+      anularModal.classList.add("is-hidden");
+      pendingAnularForm = null;
+    }
+
+    anularForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      pendingAnularForm = anularForm;
+      anularModal.classList.remove("is-hidden");
+      anularConfirm.focus();
+    });
+
+    anularConfirm.addEventListener("click", () => {
+      if (pendingAnularForm) pendingAnularForm.submit();
+    });
+    anularCancel.forEach((button) => button.addEventListener("click", closeAnularModal));
+    anularModal.addEventListener("click", (event) => {
+      if (event.target === anularModal) closeAnularModal();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !anularModal.classList.contains("is-hidden")) closeAnularModal();
+    });
+  }
+
   const crudModal = document.querySelector("[data-crud-modal]");
   const openCrudModal = document.querySelector("[data-open-crud-modal]");
   if (crudModal) {

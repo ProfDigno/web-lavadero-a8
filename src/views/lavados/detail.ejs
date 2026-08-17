@@ -153,7 +153,7 @@
       </form>
     <% } %>
 
-    <form class="panel stack danger-zone" method="post" action="/lavados/<%= lavado.id %>/anular" data-confirm="Anular este lavado descontara su comision diaria.">
+    <form class="panel stack danger-zone" method="post" action="/lavados/<%= lavado.id %>/anular" data-anular-form>
       <h2>Anular lavado</h2>
       <p>La anulacion conserva el registro y descuenta la comision acumulada del personal.</p>
       <button class="danger" type="submit">Anular</button>
@@ -211,6 +211,56 @@
       <div class="credit-modal-actions" data-credit-modal-actions>
         <button class="secondary" type="button" data-credit-modal-cancel>Cancelar</button>
         <button class="credit-modal-confirm" type="button" data-credit-modal-confirm>Continuar</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop is-hidden" data-anular-modal role="dialog" aria-modal="true" aria-labelledby="anular-modal-title">
+    <section class="anular-modal-panel" data-anular-modal-panel>
+      <div class="anular-modal-header">
+        <div class="anular-modal-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3 3.8 6.5v5.2c0 4.6 3.3 7.9 8.2 9.3 4.9-1.4 8.2-4.7 8.2-9.3V6.5L12 3z"></path>
+            <path d="M12 8v4m0 3h.01"></path>
+          </svg>
+        </div>
+        <div>
+          <h2 id="anular-modal-title">¿Anular lavado?</h2>
+          <p>Esta acción descontará la comisión acumulada.</p>
+        </div>
+        <button class="anular-modal-close" type="button" data-anular-modal-cancel aria-label="Cerrar">×</button>
+      </div>
+
+      <div class="anular-modal-facts">
+        <div class="anular-modal-fact">
+          <span>Lavado</span>
+          <strong data-anular-id>#<%= lavado.id %></strong>
+        </div>
+        <div class="anular-modal-fact">
+          <span>Cliente</span>
+          <strong data-anular-cliente><%= lavado.cliente_nombre || 'Sin nombre' %></strong>
+        </div>
+        <div class="anular-modal-fact">
+          <span>Vehículo</span>
+          <strong data-anular-vehiculo><%= [lavado.chapa, lavado.marca_modelo].filter(Boolean).join(' - ') || 'Sin datos' %></strong>
+        </div>
+        <div class="anular-modal-fact">
+          <span>Personal</span>
+          <strong data-anular-personal><%= lavado.personal_nombre || 'Sin personal' %></strong>
+        </div>
+        <div class="anular-modal-total">
+          <span>Monto a anular</span>
+          <strong data-anular-total><%= formatMoney(lavado.total) %></strong>
+        </div>
+      </div>
+
+      <p class="anular-modal-warning">
+        El registro se conservará como anulado, pero sus montos y comisiones dejarán de participar en los totales.
+      </p>
+
+      <div class="anular-modal-actions">
+        <button class="secondary" type="button" data-anular-modal-cancel>Cancelar</button>
+        <button class="anular-modal-confirm" type="button" data-anular-modal-confirm>Anular lavado</button>
       </div>
     </section>
   </div>

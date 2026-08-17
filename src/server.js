@@ -1571,6 +1571,7 @@ app.get("/analisis-lavados", requireAuth, requireEvent("AnalisisLavado-ocultar")
       fechaFin = fechaTemp;
     }
     const params = [fechaInicio, fechaFin];
+    const requestedLatestPage = Math.max(1, Number(req.query.lavados_pagina) || 1);
     const [
       metricsResult,
       dailyResult,
@@ -1579,7 +1580,8 @@ app.get("/analisis-lavados", requireAuth, requireEvent("AnalisisLavado-ocultar")
       serviceGroupsResult,
       clientGroupsResult,
       personalResult,
-      latestResult
+      latestResult,
+      latestCountResult
     ] = await Promise.all([
       query(
         `select
@@ -1697,10 +1699,24 @@ app.get("/analisis-lavados", requireAuth, requireEvent("AnalisisLavado-ocultar")
            and l.estado <> 'ANULADO'
          group by l.idlavado, c.chapa, c.marca_modelo, c.nombre, gc.nombre, fp.nombre, fp.icono_ruta, fp.color
          order by l.fecha_creado desc, l.idlavado desc
-         limit 100`,
+         limit $3 offset $4`,
+        [fechaInicio, fechaFin, 100, (requestedLatestPage - 1) * 100]
+      ),
+      query(
+        `select count(*)::int as total
+         from lavados l
+         where l.fecha_creado::date between $1 and $2
+           and l.estado <> 'ANULADO'`,
         params
       )
     ]);
+    const latestTotal = Number(latestCountResult.rows[0]?.total || 0);
+    const latestPageSize = 100;
+    const latestPageCount = Math.max(1, Math.ceil(latestTotal / latestPageSize));
+    const latestPage = Math.min(
+      latestPageCount,
+      requestedLatestPage
+    );
     const metrics = metricsResult.rows[0] || {};
     metrics.lavados = Number(metrics.lavados || 0);
     metrics.total_servicios = Number(metrics.total_servicios || 0);
@@ -1742,6 +1758,10 @@ app.get("/analisis-lavados", requireAuth, requireEvent("AnalisisLavado-ocultar")
       clientGroups: clientGroupsResult.rows,
       personalRanking: personalResult.rows,
       latestLavados: latestResult.rows,
+      latestTotal,
+      latestPage,
+      latestPageSize,
+      latestPageCount,
       chartData
     });
   } catch (error) {

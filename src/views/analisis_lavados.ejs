@@ -148,12 +148,16 @@
   </div>
 </section>
 
+<% const latestFrom = latestTotal ? ((latestPage - 1) * latestPageSize) + 1 : 0; %>
+<% const latestTo = Math.min(latestTotal, latestPage * latestPageSize); %>
+<% const latestUrl = (page) => '/analisis-lavados?fecha_inicio=' + encodeURIComponent(fechaInicio) + '&fecha_fin=' + encodeURIComponent(fechaFin) + '&lavados_pagina=' + page; %>
 <section>
   <div class="section-title compact-title">
     <div>
-      <h2>Ultimos 100 lavados</h2>
+      <h2>Últimos lavados</h2>
       <p><%= formatDate(fechaInicio) %> - <%= formatDate(fechaFin) %></p>
     </div>
+    <span class="crud-search-count">Mostrando <%= latestFrom %>-<%= latestTo %> de <%= latestTotal %> filas</span>
   </div>
   <div class="table-wrap">
     <table>
@@ -175,6 +179,11 @@
         <% if (!latestLavados.length) { %><tr><td colspan="9">Sin lavados en el rango.</td></tr><% } %>
       </tbody>
     </table>
+  </div>
+  <div class="pagination-bar analysis-pagination">
+    <span>Página <%= latestPage %> de <%= latestPageCount %></span>
+    <a class="button secondary <%= latestPage <= 1 ? 'is-disabled' : '' %>" href="<%= latestPage <= 1 ? '#' : latestUrl(latestPage - 1) %>">Anterior</a>
+    <a class="button secondary <%= latestPage >= latestPageCount ? 'is-disabled' : '' %>" href="<%= latestPage >= latestPageCount ? '#' : latestUrl(latestPage + 1) %>">Siguiente</a>
   </div>
 </section>
 
