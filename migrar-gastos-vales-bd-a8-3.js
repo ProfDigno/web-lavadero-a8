@@ -68,7 +68,7 @@ async function main() {
       throw new Error(`El destino no está vacío: gastos=${targetExpenseCount}, vales=${targetValeCount}.`);
     }
     if (sourceExpenses.length !== 35) throw new Error(`Se esperaban 35 gastos origen y se encontraron ${sourceExpenses.length}.`);
-    if (sourceVales.length !== 405) throw new Error(`Se esperaban 405 vales origen y se encontraron ${sourceVales.length}.`);
+    if (sourceVales.length !== 413) throw new Error(`Se esperaban 413 vales origen y se encontraron ${sourceVales.length}.`);
 
     const targetTypes = (await target.query("select idgasto_tipo, nombre, activo from gasto_tipo order by idgasto_tipo")).rows;
     const targetForms = (await target.query("select idforma_pago, nombre from formas_pago")).rows;

@@ -61,7 +61,7 @@
     <div class="list">
       <% ultimos.forEach((lavado) => { %>
         <div class="row-link" data-row-link="/lavados/<%= lavado.id %>" tabindex="0" role="link">
-          <a href="/lavados/<%= lavado.id %>"><strong>#<%= lavado.id %> - <%= lavado.chapa %><%= lavado.marca_modelo ? ' - ' + lavado.marca_modelo : '' %></strong></a>
+          <a href="/lavados/<%= lavado.id %>"><strong>#<%= lavado.id %> - <%= formatLavadoVehicle(lavado) %><%= lavado.marca_modelo ? ' - ' + lavado.marca_modelo : '' %></strong></a>
           <% if (lavado.fecha_creado) { %>
             <span><%= formatDateTimeShort(lavado.fecha_creado) %></span>
           <% } %>
@@ -80,7 +80,7 @@
                     aria-label="Cambiar a <%= forma.nombre %>"
                     data-payment-confirm
                     data-lavado-id="#<%= lavado.id %>"
-                    data-auto="<%= lavado.chapa %> - <%= lavado.marca_modelo %>"
+                    data-auto="<%= formatLavadoVehicle(lavado) %> - <%= lavado.marca_modelo %>"
                     data-personal="<%= lavado.personal_nombre %>"
                     data-total="<%= formatMoney(lavado.total) %>"
                     data-pago-actual="<%= lavado.forma_pago %>"

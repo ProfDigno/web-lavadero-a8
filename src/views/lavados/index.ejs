@@ -195,7 +195,7 @@
             <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
             <td class="wash-auto">
               <span class="wash-status-title estado-<%= lavado.estado.toLowerCase() %>"><%= lavado.estado %></span>
-              <strong><%= lavado.chapa %> (<%= formatTime(lavado.fecha_creado) %>)<%= Number(lavado.duplicado_emitido_dia || 0) > 1 && lavado.estado === 'EMITIDO' ? ' (DUPLICADO)' : '' %></strong>
+              <strong><%= formatLavadoVehicle(lavado) %> (<%= formatTime(lavado.fecha_creado) %>)<%= Number(lavado.duplicado_emitido_dia || 0) > 1 && lavado.estado === 'EMITIDO' ? ' (DUPLICADO)' : '' %></strong>
               <br><small><%= lavado.marca_modelo %></small>
             </td>
             <td class="wash-personal"><strong><%= lavado.personal_nombre %></strong><br><span class="wash-total"><%= formatMoney(lavado.total) %></span></td>
@@ -216,7 +216,7 @@
                             aria-label="Cambiar a <%= forma.nombre %>"
                             data-payment-confirm
                             data-lavado-id="#<%= lavado.id %>"
-                            data-auto="<%= lavado.chapa %> - <%= lavado.marca_modelo %>"
+                            data-auto="<%= formatLavadoVehicle(lavado) %> - <%= lavado.marca_modelo %>"
                             data-personal="<%= lavado.personal_nombre %>"
                             data-total="<%= formatMoney(lavado.total) %>"
                             data-pago-actual="<%= lavado.forma_pago %>"

@@ -91,7 +91,7 @@
           <tr>
             <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
             <td><%= formatDateTime(lavado.fecha_creado) %></td>
-            <td><strong><%= lavado.chapa %></strong><br><small><%= lavado.marca_modelo %></small></td>
+            <td><strong><%= formatLavadoVehicle(lavado) %></strong><br><small><%= lavado.marca_modelo %></small></td>
             <td><%= lavado.personal_nombre %></td>
             <td><%= lavado.servicios %></td>
             <td class="money-cell"><%= formatMoney(lavado.total) %></td>

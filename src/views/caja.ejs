@@ -76,7 +76,7 @@
             <tr>
               <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
               <td><%= formatTime(lavado.fecha_creado) %></td>
-              <td><strong><%= lavado.chapa %></strong><br><small><%= lavado.marca_modelo || '' %></small></td>
+              <td><strong><%= formatLavadoVehicle(lavado) %></strong><br><small><%= lavado.marca_modelo || '' %></small></td>
               <td><%- include('partials/payment_chip', { nombre: lavado.forma_pago, icono: lavado.forma_pago_icono, color: lavado.forma_pago_color }) %></td>
               <td class="money-cell"><%= formatMoney(lavado.total) %></td>
             </tr>

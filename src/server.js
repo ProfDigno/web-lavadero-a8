@@ -142,6 +142,7 @@ app.use((req, res, next) => {
   res.locals.formatDateTime = formatDateTime;
   res.locals.formatDateTimeShort = formatDateTimeShort;
   res.locals.formatTime = formatTime;
+  res.locals.formatLavadoVehicle = formatLavadoVehicle;
   res.locals.paymentIconLabel = paymentIconLabel;
   res.locals.facturaSendEstadoLabel = facturaSendEstadoLabel;
   next();
@@ -208,6 +209,17 @@ function requireItem(code, blockedMessage) {
 
 function requireEvent(code) {
   return requirePermission("eventos", code);
+}
+
+function requireAnyEvent(...codes) {
+  return (req, res, next) => {
+    const permissions = req.authorization?.eventos;
+    if (codes.some((code) => permissionAllowed(permissions, code))) return next();
+    return res.status(403).render("error", {
+      title: "Acceso bloqueado",
+      message: "No tiene permiso para realizar esta acción."
+    });
+  };
 }
 
 function requireFacturaCreationPermission(req, res, next) {
@@ -358,6 +370,12 @@ function formatTime(value) {
   const parts = dateParts(value);
   if (!parts) return "";
   return `${padDatePart(parts.hour)}:${padDatePart(parts.minute)}`;
+}
+
+function formatLavadoVehicle(lavado) {
+  const numero = Number(lavado?.numero || 0);
+  const chapa = String(lavado?.chapa || "").trim();
+  return numero > 0 ? `(${numero})-${chapa}` : chapa;
 }
 
 function paymentIconLabel(iconName) {
@@ -1874,7 +1892,7 @@ app.get("/clientes/buscar", requireAuth, async (req, res, next) => {
   }
 });
 
-app.get("/facturas/ruc", requireAuth, requireEvent("factura-ocultar"), async (req, res) => {
+app.get("/facturas/ruc", requireAuth, requireAnyEvent("factura-ocultar", "factura_libre-ocultar"), async (req, res) => {
   const ruc = normalizeRucInput(req.query.ruc);
   if (!ruc || !isBasicRuc(ruc)) {
     return res.status(400).json({ found: false, message: "Ingrese un RUC valido." });
@@ -2841,7 +2859,7 @@ app.get("/grupo-creditos/:id/excel", requireAuth, requireEvent("credito_grupo-oc
       row.values = [
         `#${lavado.id}`,
         formatDateTime(lavado.fecha_creado),
-        `${lavado.chapa || ""}${lavado.marca_modelo ? ` - ${lavado.marca_modelo}` : ""}`.trim(),
+        `${formatLavadoVehicle(lavado)}${lavado.marca_modelo ? ` - ${lavado.marca_modelo}` : ""}`.trim(),
         lavado.personal_nombre || "",
         lavado.servicios || "",
         Number(lavado.total || 0)
@@ -2998,7 +3016,7 @@ app.get("/grupo-creditos/:id/pdf", requireAuth, requireEvent("credito_grupo-ocul
       drawPdfRow(doc, columns, [
         `#${lavado.id}`,
         formatDateTime(lavado.fecha_creado),
-        `${lavado.chapa || ""}${lavado.marca_modelo ? ` - ${lavado.marca_modelo}` : ""}`.trim(),
+        `${formatLavadoVehicle(lavado)}${lavado.marca_modelo ? ` - ${lavado.marca_modelo}` : ""}`.trim(),
         lavado.personal_nombre || "",
         lavado.servicios || "",
         formatMoney(lavado.total)

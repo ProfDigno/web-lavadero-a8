@@ -167,7 +167,7 @@
           <tr class="estado-<%= lavado.estado.toLowerCase() %>">
             <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
             <td><%= formatDateTime(lavado.fecha_creado) %></td>
-            <td><strong><%= lavado.chapa %></strong><br><small><%= lavado.marca_modelo || lavado.cliente_nombre || '' %></small></td>
+            <td><strong><%= formatLavadoVehicle(lavado) %></strong><br><small><%= lavado.marca_modelo || lavado.cliente_nombre || '' %></small></td>
             <td><%= lavado.grupo_cliente_nombre || '' %></td>
             <td><%= lavado.personal_nombre %></td>
             <td><%- include('partials/payment_chip', { nombre: lavado.forma_pago, icono: lavado.forma_pago_icono, color: lavado.forma_pago_color }) %></td>

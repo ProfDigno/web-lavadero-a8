@@ -2,7 +2,7 @@
 <div class="page-head">
   <div>
     <h1>Lavado #<%= lavado.id %></h1>
-    <p class="wash-vehicle" style="--vehicle-color: <%= lavado.forma_pago_color || '#115e59' %>"><%= lavado.chapa %> - <%= lavado.marca_modelo %></p>
+    <p class="wash-vehicle" style="--vehicle-color: <%= lavado.forma_pago_color || '#115e59' %>"><%= formatLavadoVehicle(lavado) %> - <%= lavado.marca_modelo %></p>
   </div>
   <div class="actions">
     <a class="button secondary" href="/lavados">Volver</a>
@@ -242,7 +242,7 @@
         </div>
         <div class="anular-modal-fact">
           <span>Vehículo</span>
-          <strong data-anular-vehiculo><%= [lavado.chapa, lavado.marca_modelo].filter(Boolean).join(' - ') || 'Sin datos' %></strong>
+          <strong data-anular-vehiculo><%= [formatLavadoVehicle(lavado), lavado.marca_modelo].filter(Boolean).join(' - ') || 'Sin datos' %></strong>
         </div>
         <div class="anular-modal-fact">
           <span>Personal</span>

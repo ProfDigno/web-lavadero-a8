@@ -130,11 +130,11 @@ async function preflight() {
     }
 
     const expected = {
-      lavado: 4977,
-      lavado_servicios_validos: 6765,
-      lavado_personal: 8155,
+      lavado: 5252,
+      lavado_servicios_validos: 7086,
+      lavado_personal: 8681,
       gastos: 35,
-      vales: 405
+      vales: 413
     };
     const mismatches = Object.keys(expected)
       .filter((key) => sourceCounts[key] !== expected[key])
@@ -270,6 +270,7 @@ async function main() {
   const preflightData = await preflight();
   const backupPath = runBackup(skipBackup);
   await runCleanup();
+  runNodeScript("migrar-clientes-faltantes-bd-a8-3.js");
   runNodeScript("migrar-lavados-bd-a8-3.js");
   runNodeScript("migrar-gastos-vales-bd-a8-3.js");
   runNodeScript("recalcular-comisiones-diarias.js");

@@ -15,11 +15,13 @@ El ejecutor se encuentra en `migrar-todo-bd-a8-3.js`.
 ## Datos incluidos
 
 - `LIMPIAR_DATOS_OPERATIVOS.sql`
+- `migrar-clientes-faltantes-bd-a8-3.js`
 - `migrar-lavados-bd-a8-3.js`
 - `migrar-gastos-vales-bd-a8-3.js`
 - `recalcular-comisiones-diarias.js`
 
-No se incluyen cambios de interfaz, edición de clientes, conversión manual a crédito ni estilos visuales.
+No se incluyen cambios de interfaz, conversión manual a crédito ni estilos visuales. Cuando el origen
+contiene clientes nuevos utilizados por los lavados, se migran previamente solo esos clientes faltantes.
 
 ## Requisitos previos
 
@@ -81,9 +83,9 @@ Consulta el destino, lee los reportes individuales y genera:
 
 ### Lavados
 
-- 4.977 lavados.
-- 6.765 detalles de servicios válidos.
-- 8.155 relaciones de personal.
+- 5.252 lavados.
+- 7.086 detalles de servicios válidos.
+- 8.681 relaciones de personal.
 - Siguiente `idlavado`: 4.978.
 - Referencias huérfanas: 0.
 
@@ -93,7 +95,7 @@ Se informan, pero no se migran, los 7 productos asociados a 3 lavados y los vín
 
 - 35 gastos.
 - Total gastos: 4.377.000.
-- 405 vales.
+- 413 vales.
 - Total vales: 33.838.278.
 - Siguiente `idgasto`: 36.
 - Siguiente `idvales_personal`: 406.
@@ -138,4 +140,3 @@ No se deben modificar esas cantidades durante la limpieza ni las migraciones.
 - No repetir una etapa parcialmente ejecutada sin revisar el estado del destino.
 - Restaurar el respaldo si se necesita volver al estado anterior.
 - Ejecutar nuevamente `preflight` antes de reintentar.
-
