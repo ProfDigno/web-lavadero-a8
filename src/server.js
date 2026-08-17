@@ -1,5 +1,7 @@
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
+const { execFile } = require("child_process");
 const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
@@ -404,6 +406,41 @@ function safeDownloadName(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "") || "reporte";
+}
+
+function renderFacturaWithJasper(facturaId, totalLetras) {
+  const renderer = path.join(__dirname, "..", "tools", "jasper", process.platform === "win32" ? "render-factura.cmd" : "render-factura.sh");
+  const output = path.join(os.tmpdir(), `factura-${process.pid}-${Date.now()}.pdf`);
+  const command = process.platform === "win32" ? renderer : "bash";
+  const args = process.platform === "win32" ? [String(facturaId), output] : [renderer, String(facturaId), output];
+  const env = {
+    ...process.env,
+    DB_HOST: config.db.host,
+    DB_PORT: String(config.db.port),
+    DB_NAME: config.db.database,
+    DB_USER: config.db.user,
+    DB_PASSWORD: config.db.password,
+    FACTURA_TOTAL_LETRAS: String(totalLetras || "")
+  };
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { env, windowsHide: true, maxBuffer: 1024 * 1024 }, (error, _stdout, stderr) => {
+      if (error) {
+        try { fs.unlinkSync(output); } catch (_cleanupError) {}
+        const detail = String(stderr || "").trim();
+        const safeError = new Error(detail ? `No se pudo generar el PDF de la factura: ${detail}` : "No se pudo generar el PDF de la factura.");
+        safeError.cause = error;
+        return reject(safeError);
+      }
+      try {
+        const pdf = fs.readFileSync(output);
+        fs.unlinkSync(output);
+        resolve(pdf);
+      } catch (readError) {
+        try { fs.unlinkSync(output); } catch (_cleanupError) {}
+        reject(readError);
+      }
+    });
+  });
 }
 
 function encryptionKey() {
@@ -1158,7 +1195,7 @@ async function getFacturaServicios() {
 }
 
 async function getFacturaById(id) {
-  const factura = await query(`select * from facturas where id = $1`, [id]);
+  const factura = await query(`select f.*, f.idfactura as id from facturas f where f.idfactura = $1`, [id]);
   if (!factura.rows[0]) return null;
   const items = await query(
     `select fi.*, s.nombre as servicio_nombre
@@ -1198,7 +1235,7 @@ async function buildFacturaFromLavado(lavadoId) {
       numero: "",
       fecha_emision: todayIso(),
       fk_idcliente: lavado.rows[0].fk_idcliente,
-      fk_idlavado: lavado.rows[0].id,
+      fk_idlavado: lavado.rows[0].idlavado,
       cliente_nombre: lavado.rows[0].cliente_nombre || lavado.rows[0].marca_modelo || "SIN NOMBRE",
       cliente_ruc: lavado.rows[0].cliente_ruc || "",
       cliente_direccion: lavado.rows[0].cliente_direccion || "",
@@ -1238,7 +1275,7 @@ async function saveFactura(req, facturaId) {
              iva_10 = $9,
              total = $10,
              origen = $11
-         where id = $12`,
+         where idfactura = $12`,
         [
           String(req.body.numero || "").trim() || null,
           req.body.fecha_emision || todayIso(),
@@ -1277,7 +1314,7 @@ async function saveFactura(req, facturaId) {
           creadoPor
         ]
       );
-      savedId = created.rows[0].id;
+      savedId = created.rows[0].idfactura;
     }
 
     for (const item of items) {
@@ -2072,7 +2109,7 @@ app.get("/facturas", requireAuth, requireEvent("factura-ocultar"), async (req, r
     const where = fecha ? "where f.fecha_emision = $1" : "";
     if (fecha) params.push(fecha);
     const facturas = await query(
-      `select f.*, c.chapa, c.marca_modelo
+      `select f.*, f.idfactura as id, c.chapa, c.marca_modelo
        from facturas f
        left join clientes c on c.idcliente = f.fk_idcliente
        ${where}
@@ -2165,51 +2202,12 @@ app.get("/facturas/:id/pdf", requireAuth, requireEvent("factura-ocultar"), async
   try {
     const data = await getFacturaById(req.params.id);
     if (!data) return res.status(404).render("error", { title: "No encontrado", message: "Factura no encontrada." });
-    const { factura, items } = data;
+    const { factura } = data;
     const filename = `factura-${safeDownloadName(factura.numero || factura.id)}.pdf`;
+    const pdf = await renderFacturaWithJasper(factura.id, numeroALetras(factura.total));
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-
-    const doc = new PDFDocument({ size: [612, 1008], margin: 0 });
-    doc.pipe(res);
-    const ox = 10;
-    const oy = 10;
-    const detailHeight = 305;
-    const text = (value, x, y, width, options = {}) => {
-      doc.font(options.bold ? "Helvetica-Bold" : "Helvetica")
-        .fontSize(options.size || 8)
-        .fillColor("#000")
-        .text(String(value || ""), ox + x, oy + y + (options.offsetY || 0), {
-          width,
-          align: options.align || "left",
-          lineBreak: false
-        });
-    };
-    const drawFacturaArea = (offsetY) => {
-      text(formatDateInput(factura.fecha_emision), 48, 84, 100, { bold: true, offsetY });
-      text("CONTADO", 454, 67, 100, { bold: true, align: "center", offsetY });
-      text(factura.cliente_nombre, 107, 112, 238, { bold: true, offsetY });
-      text(factura.cliente_direccion || "", 391, 112, 168, { offsetY });
-      text(factura.cliente_ruc || "", 64, 98, 100, { bold: true, offsetY });
-      text(factura.numero || "", 195, 86, 100, { offsetY });
-
-      items.slice(0, 9).forEach((item, index) => {
-        const y = 143 + index * 12;
-        text(plainNumber(item.cantidad), 11 + 0, y, 48, { bold: true, align: "center", offsetY });
-        text(item.descripcion, 11 + 56, y, 251, { bold: true, offsetY });
-        text(plainNumber(item.precio_unitario), 11 + 307, y, 58, { bold: true, align: "right", offsetY });
-        text(plainNumber(item.total), 11 + 490, y, 63, { bold: true, align: "right", offsetY });
-      });
-
-      text(numeroALetras(factura.total), 84, 260, 357, { bold: true, offsetY });
-      text(plainNumber(factura.total), 501, 261, 63, { bold: true, align: "right", offsetY });
-      text("0", 101, 275, 39, { bold: true, align: "right", offsetY });
-      text(plainNumber(factura.iva_10), 157, 275, 42, { bold: true, align: "right", offsetY });
-      text(plainNumber(factura.iva_10), 224, 275, 49, { bold: true, align: "right", offsetY });
-    };
-
-    [0, detailHeight, detailHeight * 2].forEach(drawFacturaArea);
-    doc.end();
+    res.send(pdf);
   } catch (error) {
     next(error);
   }
