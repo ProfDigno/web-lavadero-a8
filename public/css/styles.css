@@ -260,6 +260,21 @@ button.secondary,
   color: var(--primary-dark);
 }
 
+button.pass-credit-button {
+  min-width: 220px;
+  min-height: 56px;
+  padding: 0 28px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 1.05rem;
+  box-shadow: 0 6px 16px rgba(245, 158, 11, .28);
+}
+
+button.pass-credit-button:hover {
+  background: #d97706;
+  box-shadow: 0 10px 24px rgba(217, 119, 6, .32);
+}
+
 button.ghost {
   background: transparent;
   color: #fff;
@@ -2184,6 +2199,229 @@ small,
 .modal-actions {
   display: flex;
   gap: 10px;
+}
+
+.credit-modal-panel {
+  width: min(560px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(245, 158, 11, .24);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(23, 32, 42, .3);
+}
+
+.credit-modal-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 13px;
+  padding: 20px 22px;
+  background: linear-gradient(135deg, #fff7e6, #fffaf2);
+  border-bottom: 1px solid #f8dfb2;
+}
+
+.credit-modal-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: #f59e0b;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(245, 158, 11, .28);
+}
+
+.credit-modal-icon svg {
+  width: 25px;
+  height: 25px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.credit-modal-header h2 {
+  margin: 0;
+  color: #9a5a00;
+  font-size: 22px;
+}
+
+.credit-modal-header p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.credit-modal-close {
+  min-height: 34px;
+  width: 34px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 25px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.credit-modal-close:hover {
+  background: #fff0d2;
+  color: #9a5a00;
+  box-shadow: none;
+}
+
+.credit-modal-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 20px 22px 10px;
+}
+
+.credit-modal-fact,
+.credit-modal-total {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fafb;
+}
+
+.credit-modal-fact span,
+.credit-modal-total span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.credit-modal-fact strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.credit-modal-total {
+  grid-column: 1 / -1;
+  border-color: #f8d28a;
+  background: #fff8e9;
+}
+
+.credit-modal-total strong {
+  color: #c26c00;
+  font-size: 25px;
+}
+
+.credit-modal-message {
+  margin: 8px 22px 0;
+  padding: 13px 15px;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  background: #fff8e9;
+  color: #754700;
+  line-height: 1.45;
+}
+
+.credit-validation-alert {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 13px;
+  margin: 18px 22px 0;
+  padding: 16px;
+  border: 1px solid #f1b46a;
+  border-radius: 12px;
+  background: #fff4e5;
+  color: #713f12;
+}
+
+.credit-validation-alert-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.credit-validation-alert h3 {
+  margin: 0 0 4px;
+  color: #9a5a00;
+  font-size: 17px;
+}
+
+.credit-validation-alert p {
+  grid-column: 1 / -1;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.credit-validation-accept {
+  grid-column: 1 / -1;
+  justify-self: end;
+  min-width: 110px;
+  background: #f59e0b;
+}
+
+.credit-validation-accept:hover {
+  background: #d97706;
+}
+
+.credit-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px 22px 22px;
+}
+
+.credit-modal-confirm {
+  min-width: 170px;
+  background: #f59e0b;
+  box-shadow: 0 6px 16px rgba(245, 158, 11, .25);
+}
+
+.credit-modal-confirm:hover {
+  background: #d97706;
+  box-shadow: 0 10px 24px rgba(217, 119, 6, .3);
+}
+
+@media (max-width: 560px) {
+  .credit-modal-header,
+  .credit-modal-facts,
+  .credit-modal-actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .credit-modal-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .credit-modal-total {
+    grid-column: auto;
+  }
+
+  .credit-modal-message {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .credit-validation-alert {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .credit-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .credit-modal-actions button {
+    width: 100%;
+  }
 }
 
 @media (min-width: 1000px) {

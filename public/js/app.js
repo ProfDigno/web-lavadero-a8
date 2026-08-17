@@ -1,6 +1,14 @@
 (function () {
   const navToggle = document.querySelector(".nav-toggle");
   const mainNavigation = document.querySelector("#main-navigation");
+  const analysisPersonalSelect = document.querySelector("[data-analysis-personal-select]");
+
+  if (analysisPersonalSelect) {
+    analysisPersonalSelect.addEventListener("change", () => {
+      const form = analysisPersonalSelect.closest("form");
+      if (form) form.submit();
+    });
+  }
 
   if (navToggle && mainNavigation) {
     const desktopQuery = window.matchMedia("(min-width: 1000px)");
@@ -1011,6 +1019,161 @@
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !newWashModal.classList.contains("is-hidden")) closeNewWashModal();
+    });
+  }
+
+  const editWashForm = document.querySelector("[data-edit-wash-form]");
+  const creditModal = document.querySelector("[data-credit-modal]");
+  if (editWashForm && creditModal) {
+    const creditModalTitle = creditModal.querySelector("[data-credit-modal-title]");
+    const creditModalSubtitle = creditModal.querySelector("[data-credit-modal-subtitle]");
+    const creditModalMessage = creditModal.querySelector("[data-credit-modal-message]");
+    const creditModalClient = creditModal.querySelector("[data-credit-client]");
+    const creditModalRuc = creditModal.querySelector("[data-credit-ruc]");
+    const creditModalGroupLabel = creditModal.querySelector("[data-credit-group-label]");
+    const creditModalGroup = creditModal.querySelector("[data-credit-group]");
+    const creditModalTotal = creditModal.querySelector("[data-credit-total]");
+    const creditModalFacts = creditModal.querySelector(".credit-modal-facts");
+    const creditModalMessageBox = creditModal.querySelector("[data-credit-modal-message]");
+    const creditModalActions = creditModal.querySelector("[data-credit-modal-actions]");
+    const creditValidationAlert = creditModal.querySelector("[data-credit-validation-alert]");
+    const creditValidationMessage = creditModal.querySelector("[data-credit-validation-message]");
+    const creditValidationAccept = creditModal.querySelector("[data-credit-validation-accept]");
+    const creditModalConfirm = creditModal.querySelector("[data-credit-modal-confirm]");
+    const creditModalCancel = creditModal.querySelectorAll("[data-credit-modal-cancel]");
+    const state = { step: "credit", submitter: null, allowSubmit: false, validationTarget: null };
+
+    function populateCreditModal() {
+      const clientName = editWashForm.querySelector("[name='cliente_nombre']")?.value.trim();
+      const ruc = editWashForm.querySelector("[name='cliente_ruc']")?.value.trim();
+      const groupSelect = editWashForm.querySelector("[name='fk_idgrupo_cliente']");
+      const selectedGroup = groupSelect?.options[groupSelect.selectedIndex]?.textContent.trim();
+      const total = editWashForm.querySelector("[data-total]")?.textContent.trim();
+      creditModalClient.textContent = clientName || "Sin nombre";
+      creditModalRuc.textContent = ruc || "Sin RUC";
+      creditModalGroup.textContent = groupSelect?.value ? selectedGroup : "Sin grupo";
+      creditModalTotal.textContent = total || "Gs. 0";
+    }
+
+    function openCreditModal(step) {
+      state.step = step;
+      creditValidationAlert.classList.add("is-hidden");
+      creditModalFacts.classList.remove("is-hidden");
+      creditModalMessageBox.classList.remove("is-hidden");
+      creditModalActions.classList.remove("is-hidden");
+      populateCreditModal();
+      const hasGroup = Boolean(editWashForm.querySelector("[name='fk_idgrupo_cliente']")?.value);
+      if (step === "group") {
+        creditModalGroupLabel.textContent = "Nombre / razón social";
+        creditModalTitle.textContent = "Crear grupo de crédito";
+        creditModalSubtitle.textContent = "Se creará un grupo con los datos actuales del cliente.";
+        creditModalMessage.textContent = "¿Querés crear automáticamente el grupo y continuar con el crédito?";
+        creditModalConfirm.textContent = "Crear grupo y continuar";
+        creditModalGroup.textContent = "Nuevo grupo: " + (creditModalClient.textContent || "Sin nombre");
+      } else {
+        creditModalGroupLabel.textContent = "Grupo cliente";
+        creditModalTitle.textContent = "Pasar lavado a crédito";
+        creditModalSubtitle.textContent = "Verifique los datos antes de continuar.";
+        creditModalMessage.textContent = hasGroup
+          ? "El lavado quedará asociado a un crédito por grupo."
+          : "El lavado quedará asociado a un crédito por grupo y luego podrá crear el grupo automáticamente.";
+        creditModalConfirm.textContent = "Continuar";
+      }
+      creditModal.classList.remove("is-hidden");
+      creditModalConfirm.focus();
+    }
+
+    function showValidationAlert(message, target) {
+      state.validationTarget = target;
+      creditModalTitle.textContent = "Datos incompletos";
+      creditModalSubtitle.textContent = "Complete el dato indicado para continuar.";
+      creditModalFacts.classList.add("is-hidden");
+      creditModalMessageBox.classList.add("is-hidden");
+      creditModalActions.classList.add("is-hidden");
+      creditValidationMessage.textContent = message;
+      creditValidationAlert.classList.remove("is-hidden");
+      creditModal.classList.remove("is-hidden");
+      creditValidationAccept.focus();
+    }
+
+    function validateCreditFields() {
+      const rucInput = editWashForm.querySelector("[name='cliente_ruc']");
+      const nombreInput = editWashForm.querySelector("[name='cliente_nombre']");
+      const groupSelect = editWashForm.querySelector("[name='fk_idgrupo_cliente']");
+      const validationMessage = "Para pasar a crédito, el RUC y el nombre del cliente deben tener al menos 3 caracteres.";
+      if ((rucInput?.value.trim().length || 0) < 3) return { message: validationMessage, target: rucInput };
+      if ((nombreInput?.value.trim().length || 0) < 3) return { message: validationMessage, target: nombreInput };
+      if (groupSelect && !groupSelect.value) {
+        return { message: "Para pasar a crédito, el cliente debe estar asociado a un grupo cliente.", target: groupSelect };
+      }
+      return null;
+    }
+
+    function closeCreditModal() {
+      creditModal.classList.add("is-hidden");
+      state.step = "credit";
+      state.submitter = null;
+      state.validationTarget = null;
+    }
+
+    function submitCreditForm(createGroup) {
+      creditModal.classList.add("is-hidden");
+      if (createGroup) {
+        editWashForm.querySelectorAll("[data-auto-group-flag]").forEach((field) => field.remove());
+        const field = document.createElement("input");
+        field.type = "hidden";
+        field.name = "crear_grupo_automatico";
+        field.value = "1";
+        field.dataset.autoGroupFlag = "true";
+        editWashForm.appendChild(field);
+      }
+      state.allowSubmit = true;
+      editWashForm.requestSubmit(state.submitter);
+    }
+
+    editWashForm.addEventListener("submit", (event) => {
+      if (event.submitter?.dataset.passCredit === undefined) return;
+      if (state.allowSubmit) {
+        state.allowSubmit = false;
+        return;
+      }
+      event.preventDefault();
+      state.submitter = event.submitter;
+      const validation = validateCreditFields();
+      if (validation) {
+        showValidationAlert(validation.message, validation.target);
+        return;
+      }
+      openCreditModal("credit");
+    });
+
+    creditValidationAccept.addEventListener("click", () => {
+      const target = state.validationTarget;
+      closeCreditModal();
+      if (target) {
+        target.focus({ preventScroll: true });
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+
+    creditModalConfirm.addEventListener("click", () => {
+      if (state.step === "credit") {
+        const groupSelect = editWashForm.querySelector("[name='fk_idgrupo_cliente']");
+        if (groupSelect && !groupSelect.value) {
+          openCreditModal("group");
+          return;
+        }
+        submitCreditForm(false);
+        return;
+      }
+      submitCreditForm(true);
+    });
+    creditModalCancel.forEach((button) => button.addEventListener("click", closeCreditModal));
+    creditModal.addEventListener("click", (event) => {
+      if (event.target === creditModal) closeCreditModal();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !creditModal.classList.contains("is-hidden")) closeCreditModal();
     });
   }
 

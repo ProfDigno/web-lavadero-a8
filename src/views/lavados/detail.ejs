@@ -59,6 +59,25 @@
       <span class="hint">Cambie lavadores, servicios o precios</span>
     </div>
     <form method="post" action="/lavados/<%= lavado.id %>/editar" class="stack wash-form" data-edit-wash-form>
+      <div class="grid two">
+        <label>
+          RUC
+          <input name="cliente_ruc" value="<%= lavado.ruc || '' %>" data-uppercase>
+        </label>
+        <label>
+          Nombre del cliente
+          <input name="cliente_nombre" value="<%= lavado.cliente_nombre || '' %>" data-uppercase>
+        </label>
+        <label>
+          Grupo cliente
+          <select name="fk_idgrupo_cliente">
+            <option value="">Sin grupo</option>
+            <% grupos.forEach((grupo) => { %>
+              <option value="<%= grupo.idgrupo_cliente %>" <%= Number(lavado.fk_idgrupo_cliente || 0) === Number(grupo.idgrupo_cliente) ? 'selected' : '' %>><%= grupo.nombre %><%= grupo.es_credito ? ' - credito' : '' %></option>
+            <% }) %>
+          </select>
+        </label>
+      </div>
       <div class="choice-group">
         <span class="choice-label">Lavador/es</span>
         <div data-personal-inputs>
@@ -108,7 +127,12 @@
           <span>Lavadero 60% <strong data-saldo>0</strong></span>
         </div>
       </div>
-      <button type="submit">Guardar cambios</button>
+      <div class="actions">
+        <button type="submit">Guardar cambios</button>
+        <% if (lavado.estado !== 'CREDITO') { %>
+          <button class="pass-credit-button" type="submit" name="pasar_a_credito" value="1" data-pass-credit>Pasar a crédito</button>
+        <% } %>
+      </div>
     </form>
   </section>
 
@@ -135,5 +159,60 @@
       <button class="danger" type="submit">Anular</button>
     </form>
   </section>
+
+  <div class="modal-backdrop is-hidden" data-credit-modal role="dialog" aria-modal="true" aria-labelledby="credit-modal-title">
+    <section class="credit-modal-panel" data-credit-modal-panel>
+      <div class="credit-modal-header">
+        <div class="credit-modal-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3 3.8 6.5v5.2c0 4.6 3.3 7.9 8.2 9.3 4.9-1.4 8.2-4.7 8.2-9.3V6.5L12 3z"></path>
+            <path d="M12 8v4m0 3h.01"></path>
+          </svg>
+        </div>
+        <div>
+          <h2 id="credit-modal-title" data-credit-modal-title>Pasar lavado a crédito</h2>
+          <p data-credit-modal-subtitle>Verifique los datos antes de continuar.</p>
+        </div>
+        <button class="credit-modal-close" type="button" data-credit-modal-cancel aria-label="Cerrar">×</button>
+      </div>
+
+      <div class="credit-modal-facts">
+        <div class="credit-modal-fact">
+          <span>Cliente</span>
+          <strong data-credit-client>Sin nombre</strong>
+        </div>
+        <div class="credit-modal-fact">
+          <span>RUC</span>
+          <strong data-credit-ruc>Sin RUC</strong>
+        </div>
+        <div class="credit-modal-fact">
+          <span data-credit-group-label>Grupo cliente</span>
+          <strong data-credit-group>Sin grupo</strong>
+        </div>
+        <div class="credit-modal-total">
+          <span>Monto del lavado</span>
+          <strong data-credit-total>Gs. 0</strong>
+        </div>
+      </div>
+
+      <p class="credit-modal-message" data-credit-modal-message>
+        El lavado quedará asociado a un crédito por grupo.
+      </p>
+
+      <div class="credit-validation-alert is-hidden" data-credit-validation-alert role="alert">
+        <div class="credit-validation-alert-icon" aria-hidden="true">!</div>
+        <div>
+          <h3>Datos incompletos</h3>
+          <p data-credit-validation-message></p>
+        </div>
+        <button class="credit-validation-accept" type="button" data-credit-validation-accept>Aceptar</button>
+      </div>
+
+      <div class="credit-modal-actions" data-credit-modal-actions>
+        <button class="secondary" type="button" data-credit-modal-cancel>Cancelar</button>
+        <button class="credit-modal-confirm" type="button" data-credit-modal-confirm>Continuar</button>
+      </div>
+    </section>
+  </div>
 <% } %>
 <%- include('../partials/footer') %>

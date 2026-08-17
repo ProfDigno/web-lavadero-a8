@@ -29,7 +29,7 @@
   </label>
   <label>
     Personal
-    <select name="fk_idpersonal">
+    <select name="fk_idpersonal" data-analysis-personal-select>
       <option value="todos" <%= !selectedPersonalId ? 'selected' : '' %>>Todos</option>
       <% personal.forEach((persona) => { %>
         <option value="<%= persona.id %>" <%= Number(selectedPersonalId || 0) === Number(persona.id) ? 'selected' : '' %>><%= persona.nombre %></option>

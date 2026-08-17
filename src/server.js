@@ -2302,6 +2302,7 @@ app.get("/lavados/:id", requireAuth, async (req, res, next) => {
   try {
     const lavado = await query(
       `select l.*, c.chapa, c.marca_modelo, c.ruc, c.nombre as cliente_nombre,
+              c.fk_idgrupo_cliente,
               coalesce(string_agg(distinct p.nombre, ', ' order by p.nombre), '') as personal_nombre, fp.nombre as forma_pago,
               fp.icono_ruta as forma_pago_icono, fp.color as forma_pago_color
        from lavados l
@@ -2310,11 +2311,12 @@ app.get("/lavados/:id", requireAuth, async (req, res, next) => {
        left join personal p on p.idpersonal = lp.fk_idpersonal
        join formas_pago fp on fp.idforma_pago = l.fk_idforma_pago
        where l.idlavado = $1
-       group by l.idlavado, c.chapa, c.marca_modelo, c.ruc, c.nombre, fp.nombre, fp.icono_ruta, fp.color`,
+       group by l.idlavado, c.chapa, c.marca_modelo, c.ruc, c.nombre, c.fk_idgrupo_cliente,
+                fp.nombre, fp.icono_ruta, fp.color`,
       [req.params.id]
     );
     if (!lavado.rows[0]) return res.status(404).render("error", { title: "No encontrado", message: "Lavado no encontrado." });
-    const [servicios, formasPago, personal, personalLavado] = await Promise.all([
+    const [servicios, formasPago, personal, personalLavado, grupos] = await Promise.all([
       query(
         `select ls.*, s.nombre
          from lavado_servicios ls
@@ -2325,7 +2327,8 @@ app.get("/lavados/:id", requireAuth, async (req, res, next) => {
       ),
       query(`select * from formas_pago where activo = true and mostrar_despues_crear = true and nombre <> 'ANULADO' order by ${formasPagoOrderSql()}`),
       query(`select * from personal where activo = true order by nombre`),
-      query(`select fk_idpersonal from lavado_personal where fk_idlavado = $1 order by idlavado_personal`, [req.params.id])
+      query(`select fk_idpersonal from lavado_personal where fk_idlavado = $1 order by idlavado_personal`, [req.params.id]),
+      query(`select * from grupo_cliente where activo = true order by nombre`)
     ]);
     const serviciosActivos = await query(
       `select s.*, sg.nombre as grupo_nombre
@@ -2343,6 +2346,7 @@ app.get("/lavados/:id", requireAuth, async (req, res, next) => {
       serviciosDisponibles: serviciosActivos.rows,
       formasPago: formasPago.rows,
       personal: personal.rows,
+      grupos: grupos.rows,
       personalIds: personalLavado.rows.map((row) => String(row.fk_idpersonal))
     });
   } catch (error) {
@@ -2358,6 +2362,80 @@ app.post("/lavados/:id/editar", requireAuth, async (req, res, next) => {
       const lavado = lavadoResult.rows[0];
       if (!lavado) throw new Error("Lavado no encontrado.");
       if (lavado.estado === "ANULADO") throw new Error("No se puede editar un lavado anulado.");
+
+      const clienteRuc = toUpperOrNull(req.body.cliente_ruc);
+      const clienteNombre = toUpperOrNull(req.body.cliente_nombre);
+      const pasarACredito = req.body.pasar_a_credito === "1";
+      const crearGrupoAutomatico = req.body.crear_grupo_automatico === "1";
+      if (pasarACredito && lavado.estado === "CREDITO") {
+        throw new Error("El lavado ya está en crédito.");
+      }
+      if (pasarACredito && (!clienteRuc || clienteRuc.length < 3 || !clienteNombre || clienteNombre.length < 3)) {
+        throw new Error("Para pasar a crédito, el RUC y el nombre del cliente deben tener al menos 3 caracteres.");
+      }
+
+      const grupoClienteRaw = String(req.body.fk_idgrupo_cliente || "").trim();
+      let grupoClienteId = grupoClienteRaw ? Number(grupoClienteRaw) : null;
+      if (grupoClienteId !== null && (!Number.isInteger(grupoClienteId) || grupoClienteId <= 0)) {
+        throw new Error("El grupo cliente seleccionado no es válido.");
+      }
+
+      if (pasarACredito && grupoClienteId === null) {
+        if (!crearGrupoAutomatico) throw new Error("Confirme la creación automática del grupo cliente para pasar a crédito.");
+        const duplicateGroup = await client.query(
+          `select idgrupo_cliente from grupo_cliente where nombre = $1 limit 1`,
+          [clienteNombre]
+        );
+        if (duplicateGroup.rows[0]) throw new Error("Ya existe un grupo cliente con ese nombre. Seleccione ese grupo o use otro nombre.");
+        const createdGroup = await client.query(
+          `insert into grupo_cliente (nombre, razon_social, ruc, es_credito, activo, creado_por)
+           values ($1, $2, $3, true, true, $4)
+           returning idgrupo_cliente`,
+          [clienteNombre, clienteNombre, clienteRuc, creadoPor]
+        );
+        grupoClienteId = createdGroup.rows[0].idgrupo_cliente;
+      }
+
+      if (grupoClienteId !== null) {
+        const grupoResult = await client.query(
+          `select idgrupo_cliente, es_credito
+           from grupo_cliente
+           where idgrupo_cliente = $1
+             and activo = true`,
+          [grupoClienteId]
+        );
+        if (!grupoResult.rows[0]) throw new Error("El grupo cliente seleccionado no está disponible.");
+        if (pasarACredito && !grupoResult.rows[0].es_credito) {
+          throw new Error("El grupo cliente seleccionado no está habilitado para crédito.");
+        }
+      } else if (pasarACredito) {
+        throw new Error("El cliente debe estar asociado a un grupo cliente para pasar a crédito.");
+      }
+
+      const clienteUpdate = await client.query(
+        `update clientes
+         set ruc = $1,
+             nombre = $2,
+             fk_idgrupo_cliente = $3
+         where idcliente = $4`,
+        [clienteRuc, clienteNombre, grupoClienteId, lavado.fk_idcliente]
+      );
+      if (clienteUpdate.rowCount !== 1) throw new Error("Cliente asociado no encontrado.");
+
+      let creditoGrupoId = null;
+      let formaCreditoId = null;
+      if (pasarACredito) {
+        const formaCredito = await client.query(
+          `select idforma_pago
+           from formas_pago
+           where nombre = 'CREDITO'
+             and activo = true
+           limit 1`
+        );
+        if (!formaCredito.rows[0]) throw new Error("No existe una forma de pago CREDITO activa.");
+        formaCreditoId = formaCredito.rows[0].idforma_pago;
+        creditoGrupoId = await ensureOpenGrupoCredito(client, grupoClienteId, creadoPor);
+      }
 
       const personalIds = [...new Set(normalizeArray(req.body.fk_idpersonal)
         .map(Number)
@@ -2395,10 +2473,25 @@ app.post("/lavados/:id/editar", requireAuth, async (req, res, next) => {
       const saldo = Math.round(total * 60) / 100;
 
       await applyCommission(client, lavado, -1, creadoPor);
-      await client.query(
-        `update lavados set total = $1, comision_personal = $2, saldo_lavadero = $3 where id = $4`,
-        [total, comision, saldo, lavado.id]
-      );
+      if (pasarACredito) {
+        await client.query(
+          `update lavados
+           set total = $1,
+               comision_personal = $2,
+               saldo_lavadero = $3,
+               condicion = 'CREDITO',
+               estado = 'CREDITO',
+               fk_idforma_pago = $4,
+               fk_idgrupo_cliente_creditos = $5
+           where id = $6`,
+          [total, comision, saldo, formaCreditoId, creditoGrupoId, lavado.id]
+        );
+      } else {
+        await client.query(
+          `update lavados set total = $1, comision_personal = $2, saldo_lavadero = $3 where id = $4`,
+          [total, comision, saldo, lavado.id]
+        );
+      }
       await client.query(`delete from lavado_personal where fk_idlavado = $1`, [lavado.id]);
       await client.query(`delete from lavado_servicios where fk_idlavado = $1`, [lavado.id]);
 
@@ -2418,7 +2511,13 @@ app.post("/lavados/:id/editar", requireAuth, async (req, res, next) => {
 
       await applyCommission(client, { ...lavado, total }, 1, creadoPor);
     });
-    setFlash(req, "success", `Lavado #${req.params.id} actualizado correctamente.`);
+    setFlash(
+      req,
+      "success",
+      req.body.pasar_a_credito === "1"
+        ? `Lavado #${req.params.id} actualizado y pasado a crédito correctamente.`
+        : `Lavado #${req.params.id} actualizado correctamente.`
+    );
     res.redirect(`/lavados/${req.params.id}`);
   } catch (error) {
     setFlash(req, "error", userErrorMessage(error));
@@ -3006,7 +3105,7 @@ app.get("/analisis-personal", requireAuth, requireEvent("analisis_personal-ocult
     const parsedPersonalId = personalIdParam && personalIdParam !== "todos" ? Number(personalIdParam) : null;
     const selectedPersonalId = Number.isFinite(parsedPersonalId) && parsedPersonalId > 0 ? parsedPersonalId : null;
     const personalFilter = selectedPersonalId ? "and p.idpersonal = $3" : "";
-    const movementFilter = selectedPersonalId ? "and lp.fk_idpersonal = $3" : "";
+    const movementFilter = selectedPersonalId ? "and reparto.fk_idpersonal = $3" : "";
     const queryParams = selectedPersonalId ? [fechaInicio, fechaFin, selectedPersonalId] : [fechaInicio, fechaFin];
 
     const [personalResult, resumenResult, lavadosResult, comisionesResult, valesResult] = await Promise.all([
