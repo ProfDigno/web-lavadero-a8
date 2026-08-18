@@ -13,63 +13,27 @@
 <section class="panel">
   <h2>Nuevo lavado</h2>
   <form method="post" action="/lavados" class="stack wash-form" data-new-wash-form>
-    <div class="grid one">
-      <label>
-        Buscar cliente existente
-        <input type="search" data-client-search name="cliente_busqueda" value="<%= formData.cliente_busqueda || '' %>" placeholder="Chapa, marca/modelo o nombre">
-      </label>
-      <div class="client-search-results is-hidden" data-client-results></div>
-      <label>
-        Cliente seleccionado
-        <select name="fk_idcliente" data-client-select>
-          <option value="">Crear cliente rapido</option>
-          <% clientes.forEach((cliente) => { %>
-            <option
-              value="<%= cliente.id %>"
-              data-search="<%= [cliente.chapa, cliente.marca_modelo, cliente.nombre, cliente.ruc, cliente.telefono].filter(Boolean).join(' ').toLowerCase() %>"
-              data-chapa="<%= cliente.chapa || '' %>"
-              data-marca-modelo="<%= cliente.marca_modelo || '' %>"
-              data-ruc="<%= cliente.ruc || '' %>"
-              data-nombre="<%= cliente.nombre || '' %>"
-              data-telefono="<%= cliente.telefono || '' %>"
-              data-direccion="<%= cliente.direccion || '' %>"
-              data-email="<%= cliente.email || '' %>"
-              data-grupo-cliente-id="<%= cliente.fk_idgrupo_cliente || '' %>"
-              data-grupo-nombre="<%= cliente.grupo_nombre || '' %>"
-              <%= String(formData.fk_idcliente || '') === String(cliente.id) ? 'selected' : '' %>>
-              <%= cliente.chapa %> - <%= cliente.marca_modelo %><%= cliente.nombre ? ' - ' + cliente.nombre : '' %><%= cliente.grupo_nombre ? ' (' + cliente.grupo_nombre + ')' : '' %>
-            </option>
-          <% }) %>
-        </select>
-      </label>
-      <div class="choice-group">
-        <span class="choice-label">Personal</span>
-        <% const selectedPersonalIds = Array.isArray(formData.fk_idpersonal) ? formData.fk_idpersonal.map(String) : (formData.fk_idpersonal ? [String(formData.fk_idpersonal)] : []); %>
-        <div data-personal-inputs>
-          <% selectedPersonalIds.forEach((personalId) => { %><input type="hidden" name="fk_idpersonal" value="<%= personalId %>"><% }) %>
-        </div>
-        <div class="choice-buttons" data-personal-buttons>
-          <% personal.forEach((persona) => { %>
-            <button type="button" class="choice-button <%= selectedPersonalIds.includes(String(persona.id)) ? 'is-selected' : '' %>" data-personal-id="<%= persona.id %>"><%= persona.nombre %></button>
-          <% }) %>
-        </div>
-      </div>
-    </div>
-
     <fieldset class="quick-client" data-quick-client>
       <legend>Cliente rapido</legend>
+      <div class="quick-client-actions">
+        <button type="button" class="secondary quick-client-toggle" data-quick-details-toggle aria-expanded="false" aria-controls="quick-client-details">
+          Mostrar datos adicionales
+        </button>
+      </div>
       <div class="grid two">
         <label>Chapa <input name="nueva_chapa" value="<%= formData.nueva_chapa || '' %>" autocomplete="off" data-uppercase></label>
         <label>Marca/modelo <input name="nuevo_marca_modelo" value="<%= formData.nuevo_marca_modelo || '' %>" data-uppercase></label>
-        <label>
-          RUC
-          <input name="nuevo_ruc" value="<%= formData.nuevo_ruc || '' %>" data-uppercase>
-          <small class="invoice-ruc-status" data-quick-ruc-status></small>
-        </label>
-        <label>Nombre <input name="nuevo_nombre" value="<%= formData.nuevo_nombre || '' %>" data-uppercase></label>
-        <label>Telefono <input name="nuevo_telefono" value="<%= formData.nuevo_telefono || '' %>" data-uppercase></label>
-        <label>Direccion <input name="nuevo_direccion" value="<%= formData.nuevo_direccion || '' %>" data-uppercase></label>
-        <label>Email <input name="nuevo_email" type="email" value="<%= formData.nuevo_email || '' %>"></label>
+        <div id="quick-client-details" class="quick-client-details grid two is-hidden" data-quick-details>
+          <label>
+            RUC
+            <input name="nuevo_ruc" value="<%= formData.nuevo_ruc || '' %>" data-uppercase>
+            <small class="invoice-ruc-status" data-quick-ruc-status></small>
+          </label>
+          <label>Nombre <input name="nuevo_nombre" value="<%= formData.nuevo_nombre || '' %>" data-uppercase></label>
+          <label>Telefono <input name="nuevo_telefono" value="<%= formData.nuevo_telefono || '' %>" data-uppercase></label>
+          <label>Direccion <input name="nuevo_direccion" value="<%= formData.nuevo_direccion || '' %>" data-uppercase></label>
+          <label>Email <input name="nuevo_email" type="email" value="<%= formData.nuevo_email || '' %>"></label>
+        </div>
         <label>
           Grupo cliente
           <select name="nuevo_grupo_cliente_id" data-group-prefill-select>
@@ -88,6 +52,27 @@
         </label>
       </div>
     </fieldset>
+
+    <div class="grid one">
+      <label>
+        Buscar cliente existente
+        <input type="search" data-client-search name="cliente_busqueda" value="<%= formData.cliente_busqueda || '' %>" placeholder="Chapa, marca/modelo o nombre">
+      </label>
+      <div class="client-search-results is-hidden" data-client-results></div>
+      <input type="hidden" name="fk_idcliente" value="<%= formData.fk_idcliente || '' %>" data-client-id>
+      <div class="choice-group">
+        <span class="choice-label">Personal</span>
+        <% const selectedPersonalIds = Array.isArray(formData.fk_idpersonal) ? formData.fk_idpersonal.map(String) : (formData.fk_idpersonal ? [String(formData.fk_idpersonal)] : []); %>
+        <div data-personal-inputs>
+          <% selectedPersonalIds.forEach((personalId) => { %><input type="hidden" name="fk_idpersonal" value="<%= personalId %>"><% }) %>
+        </div>
+        <div class="choice-buttons" data-personal-buttons>
+          <% personal.forEach((persona) => { %>
+            <button type="button" class="choice-button <%= selectedPersonalIds.includes(String(persona.id)) ? 'is-selected' : '' %>" data-personal-id="<%= persona.id %>"><%= persona.nombre %></button>
+          <% }) %>
+        </div>
+      </div>
+    </div>
 
     <div class="services-box">
       <div class="section-title">

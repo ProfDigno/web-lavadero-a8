@@ -2112,6 +2112,30 @@ small,
   display: none;
 }
 
+.quick-client-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.quick-client-toggle {
+  min-height: 36px;
+  padding: 0 13px;
+  font-size: 12px;
+}
+
+.quick-client-details {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.quick-client input[readonly],
+.quick-client select:disabled {
+  background: #f1f5f7;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 .empty-state {
   background: #fff;
   border: 1px solid var(--line);

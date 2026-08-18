@@ -73,7 +73,7 @@
     });
   }
 
-  const clientSelect = document.querySelector("[data-client-select]");
+  const clientIdInput = document.querySelector("[data-client-id]");
   const quickClient = document.querySelector("[data-quick-client]");
   const clientSearch = document.querySelector("[data-client-search]");
   const clientResults = document.querySelector("[data-client-results]");
@@ -116,8 +116,9 @@
     select.addEventListener("change", () => prefillClientFromGroup(select));
   });
 
-  if (clientSelect && quickClient) {
+  if (clientIdInput && quickClient) {
     let clientOptions = [];
+    let chapaLookupSequence = 0;
     const quickFields = {
       chapa: quickClient.querySelector("input[name='nueva_chapa']"),
       marcaModelo: quickClient.querySelector("input[name='nuevo_marca_modelo']"),
@@ -129,6 +130,52 @@
       grupo: quickClient.querySelector("select[name='nuevo_grupo_cliente_id']")
     };
     const quickRucStatus = quickClient.querySelector("[data-quick-ruc-status]");
+    const quickDetails = quickClient.querySelector("[data-quick-details]");
+    const quickDetailsToggle = quickClient.querySelector("[data-quick-details-toggle]");
+
+    function setQuickDetailsExpanded(expanded) {
+      if (!quickDetails || !quickDetailsToggle) return;
+      quickDetails.classList.toggle("is-hidden", !expanded);
+      quickDetailsToggle.setAttribute("aria-expanded", String(expanded));
+      quickDetailsToggle.textContent = expanded ? "Ocultar datos adicionales" : "Mostrar datos adicionales";
+    }
+
+    quickDetailsToggle?.addEventListener("click", () => {
+      const expanded = quickDetailsToggle.getAttribute("aria-expanded") === "true";
+      setQuickDetailsExpanded(!expanded);
+    });
+
+    function setDetectedClientReadonly(readonly) {
+      [quickFields.marcaModelo, quickFields.ruc, quickFields.nombre, quickFields.telefono, quickFields.direccion, quickFields.email]
+        .filter(Boolean)
+        .forEach((input) => {
+          input.readOnly = readonly;
+        });
+      if (quickFields.grupo) quickFields.grupo.disabled = readonly;
+    }
+
+    function normalizeChapa(value) {
+      return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+    }
+
+    function clearDetectedClientFields() {
+      if (quickClient.dataset.detectedClient !== "true") return;
+      [quickFields.marcaModelo, quickFields.ruc, quickFields.nombre, quickFields.telefono, quickFields.direccion, quickFields.email]
+        .filter(Boolean)
+        .forEach((input) => {
+          input.value = "";
+        });
+      if (quickFields.grupo) quickFields.grupo.value = "";
+      delete quickClient.dataset.detectedClient;
+    }
+
+    function resetDetectedClient() {
+      chapaLookupSequence += 1;
+      clientIdInput.value = "";
+      clearDetectedClientFields();
+      setDetectedClientReadonly(false);
+      syncClientMode();
+    }
 
     function setQuickRucStatus(message, state) {
       if (!quickRucStatus) return;
@@ -174,93 +221,67 @@
 
     quickFields.ruc?.addEventListener("blur", lookupQuickRuc);
 
+    async function lookupQuickChapa() {
+      const chapa = normalizeChapa(quickFields.chapa?.value);
+      if (!chapa) return;
+      const lookupSequence = ++chapaLookupSequence;
+      try {
+        const response = await fetch(`/clientes/buscar?q=${encodeURIComponent(chapa)}`, {
+          headers: { Accept: "application/json" }
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (lookupSequence !== chapaLookupSequence || normalizeChapa(quickFields.chapa?.value) !== chapa) return;
+        const cliente = (data.clientes || []).find((item) => normalizeChapa(item.chapa) === chapa);
+        if (!cliente) return;
+
+        clientIdInput.value = cliente.id || "";
+        quickFields.chapa.value = cliente.chapa || quickFields.chapa.value;
+        quickFields.marcaModelo.value = cliente.marca_modelo || "";
+        quickFields.ruc.value = cliente.ruc || "";
+        quickFields.nombre.value = cliente.nombre || "";
+        quickFields.telefono.value = cliente.telefono || "";
+        quickFields.direccion.value = cliente.direccion || "";
+        quickFields.email.value = cliente.email || "";
+        if (quickFields.grupo) quickFields.grupo.value = cliente.grupo_cliente_id || cliente.fk_idgrupo_cliente || "";
+        quickClient.dataset.detectedClient = "true";
+        setDetectedClientReadonly(true);
+        syncClientMode(true);
+      } catch (error) {
+        // La búsqueda automática es auxiliar; si falla, se mantiene el alta rápida.
+      }
+    }
+
+    quickFields.chapa?.addEventListener("input", () => {
+      if (clientIdInput.value || quickClient.dataset.detectedClient === "true") resetDetectedClient();
+      else chapaLookupSequence += 1;
+    });
+
+    quickFields.chapa?.addEventListener("blur", lookupQuickChapa);
+
     function optionText(cliente) {
       return `${cliente.chapa} - ${cliente.marca_modelo}${cliente.nombre ? ` - ${cliente.nombre}` : ""}${cliente.grupo_nombre ? ` (${cliente.grupo_nombre})` : ""}`;
     }
 
-    function optionSearch(cliente) {
-      return [cliente.chapa, cliente.marca_modelo, cliente.nombre, cliente.ruc, cliente.telefono, cliente.email]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-    }
-
-    function rebuildClientOptions(clientes, selectedId) {
-      const currentValue = selectedId || clientSelect.value;
-      clientSelect.innerHTML = "";
-      const empty = document.createElement("option");
-      empty.value = "";
-      empty.textContent = "Crear cliente rapido";
-      clientSelect.appendChild(empty);
-      clientes.forEach((cliente) => {
-        const option = document.createElement("option");
-        option.value = cliente.id;
-        option.textContent = optionText(cliente);
-        option.dataset.search = optionSearch(cliente);
-        option.dataset.chapa = cliente.chapa || "";
-        option.dataset.marcaModelo = cliente.marca_modelo || "";
-        option.dataset.ruc = cliente.ruc || "";
-        option.dataset.nombre = cliente.nombre || "";
-        option.dataset.telefono = cliente.telefono || "";
-        option.dataset.direccion = cliente.direccion || "";
-        option.dataset.email = cliente.email || "";
-        option.dataset.grupoClienteId = cliente.grupo_cliente_id || "";
-        clientSelect.appendChild(option);
-      });
-      if (currentValue && Array.from(clientSelect.options).some((option) => option.value === String(currentValue))) {
-        clientSelect.value = String(currentValue);
-      }
-      clientOptions = Array.from(clientSelect.options).map((option) => ({
-        option,
-        text: `${option.textContent || ""} ${option.dataset.search || ""}`.toLowerCase(),
-        chapa: (option.dataset.chapa || "").trim().toUpperCase(),
-        value: option.value
-      }));
-    }
-
-    rebuildClientOptions(Array.from(clientSelect.options)
-      .filter((option) => option.value)
-      .map((option) => ({
-        id: option.value,
-        chapa: option.dataset.chapa || "",
-        marca_modelo: option.dataset.marcaModelo || "",
-        ruc: option.dataset.ruc || "",
-        nombre: option.dataset.nombre || "",
-        telefono: option.dataset.telefono || "",
-        direccion: option.dataset.direccion || "",
-        email: option.dataset.email || "",
-        grupo_cliente_id: option.dataset.grupoClienteId || "",
-        grupo_nombre: option.dataset.grupoNombre || ""
-      })));
-
-    function fillQuickClient(option) {
-      if (!option) return;
-      quickFields.chapa.value = option.dataset.chapa || "";
-      quickFields.marcaModelo.value = option.dataset.marcaModelo || "";
-      quickFields.ruc.value = option.dataset.ruc || "";
-      quickFields.nombre.value = option.dataset.nombre || "";
-      quickFields.telefono.value = option.dataset.telefono || "";
-      quickFields.direccion.value = option.dataset.direccion || "";
-      if (quickFields.email) quickFields.email.value = option.dataset.email || "";
-      quickFields.grupo.value = option.dataset.grupoClienteId || "";
-    }
-
-    const syncClientMode = () => {
-      const creating = !clientSelect.value;
-      quickClient.classList.toggle("is-hidden", !creating);
+    function syncClientMode(keepVisible = false) {
+      const creating = !clientIdInput.value;
+      quickClient.classList.toggle("is-hidden", !creating && !keepVisible);
       quickClient.querySelectorAll("input[name='nueva_chapa'], input[name='nuevo_marca_modelo']").forEach((input) => {
         input.required = creating;
       });
-    };
-    clientSelect.addEventListener("change", syncClientMode);
+    }
 
-    function chooseClient(option) {
-      if (!option) return;
-      fillQuickClient(option);
-      clientSelect.value = option.value;
-      clientSelect.dispatchEvent(new Event("change"));
-      if (clientSearch) clientSearch.value = option.textContent.trim();
+    function chooseClient(cliente) {
+      if (!cliente) return;
+      clientIdInput.value = cliente.id || "";
+      clientIdInput.dispatchEvent(new Event("input", { bubbles: true }));
+      if (clientSearch) {
+        clientSearch.value = optionText(cliente);
+        clientSearch.dataset.clientChapa = cliente.chapa || "";
+        clientSearch.dataset.clientNombre = cliente.nombre || "";
+      }
       if (clientResults) clientResults.classList.add("is-hidden");
+      syncClientMode();
     }
 
     function renderClientResults(matches, term) {
@@ -283,8 +304,8 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "client-result";
-        button.textContent = item.option.textContent.trim();
-        button.addEventListener("click", () => chooseClient(item.option));
+        button.textContent = optionText(item);
+        button.addEventListener("click", () => chooseClient(item));
         clientResults.appendChild(button);
       });
       clientResults.classList.remove("is-hidden");
@@ -294,6 +315,12 @@
       let searchTimer = null;
       clientSearch.addEventListener("input", () => {
         clearTimeout(searchTimer);
+        clientIdInput.value = "";
+        clearDetectedClientFields();
+        setDetectedClientReadonly(false);
+        delete clientSearch.dataset.clientChapa;
+        delete clientSearch.dataset.clientNombre;
+        syncClientMode();
         searchTimer = setTimeout(async () => {
           const term = clientSearch.value.trim();
           try {
@@ -302,16 +329,11 @@
             });
             if (!response.ok) throw new Error("No se pudo buscar clientes.");
             const data = await response.json();
-            rebuildClientOptions(data.clientes || []);
-            const matchedItems = clientOptions.filter((item) => item.value);
+            clientOptions = data.clientes || [];
+            const matchedItems = clientOptions;
             renderClientResults(matchedItems, term.toLowerCase());
             if (term && matchedItems.length === 1) {
-              clientSelect.value = matchedItems[0].value;
-              clientSelect.dispatchEvent(new Event("change"));
-            }
-            if (!term && !clientSelect.value) {
-              clientSelect.value = "";
-              clientSelect.dispatchEvent(new Event("change"));
+              chooseClient(matchedItems[0]);
             }
           } catch (error) {
             renderClientResults([], term.toLowerCase());
@@ -323,9 +345,9 @@
       quickFields.chapa.addEventListener("change", () => {
         const chapa = quickFields.chapa.value.trim().toUpperCase();
         if (!chapa) return;
-        const match = clientOptions.find((item) => item.value && item.chapa === chapa);
+        const match = clientOptions.find((item) => String(item.chapa || "").trim().toUpperCase() === chapa);
         if (!match) return;
-        chooseClient(match.option);
+        chooseClient(match);
       });
     }
     syncClientMode();
@@ -971,12 +993,12 @@
     }
 
     function selectedClient() {
-      const select = newWashForm.querySelector("[data-client-select]");
-      const option = select?.options[select.selectedIndex];
-      if (option?.value) {
+      const clientId = newWashForm.querySelector("[data-client-id]")?.value;
+      const clientSearch = newWashForm.querySelector("[data-client-search]");
+      if (clientId) {
         return {
-          auto: [option.dataset.chapa, option.dataset.marcaModelo].filter(Boolean).join(" - "),
-          client: option.dataset.nombre || option.textContent.trim()
+          auto: clientSearch?.dataset.clientChapa || clientSearch?.value || "",
+          client: clientSearch?.dataset.clientNombre || clientSearch?.value || "Sin nombre"
         };
       }
       return {
