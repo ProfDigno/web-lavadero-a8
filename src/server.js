@@ -909,7 +909,10 @@ async function getActiveMasterData() {
     query(`select * from servicio_grupo where activo = true order by nombre`)
   ]);
   return {
-    clientes: clientes.rows,
+    clientes: clientes.rows.map((cliente) => ({
+      ...cliente,
+      id: cliente.idcliente
+    })),
     personal: personal.rows,
     servicios: servicios.rows,
     formasPago: formasPago.rows,
@@ -1875,7 +1878,7 @@ app.get("/clientes/buscar", requireAuth, async (req, res, next) => {
     );
     res.json({
       clientes: result.rows.map((cliente) => ({
-        id: cliente.id,
+        id: cliente.idcliente,
         chapa: cliente.chapa || "",
         marca_modelo: cliente.marca_modelo || "",
         ruc: cliente.ruc || "",
@@ -1884,6 +1887,7 @@ app.get("/clientes/buscar", requireAuth, async (req, res, next) => {
         direccion: cliente.direccion || "",
         email: cliente.email || "",
         fk_idgrupo_cliente: cliente.fk_idgrupo_cliente || "",
+        grupo_cliente_id: cliente.fk_idgrupo_cliente || "",
         grupo_nombre: cliente.grupo_nombre || ""
       }))
     });
