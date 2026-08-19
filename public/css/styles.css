@@ -780,6 +780,21 @@ textarea:focus {
   box-shadow: 0 0 0 4px rgba(8, 127, 120, .10);
 }
 
+.wash-form input:not([type="hidden"]),
+.wash-form select,
+.wash-form textarea {
+  border-color: #9aaeb8;
+  background: #fff;
+  box-shadow: inset 0 1px 2px rgba(23, 43, 53, .08);
+}
+
+.wash-form input:not([type="hidden"]):focus,
+.wash-form select:focus,
+.wash-form textarea:focus {
+  border-color: rgba(8, 127, 120, .70);
+  box-shadow: 0 0 0 4px rgba(8, 127, 120, .14), inset 0 1px 2px rgba(23, 43, 53, .05);
+}
+
 input[type="color"] {
   padding: 4px;
 }
@@ -1851,9 +1866,11 @@ small,
 
 .payment-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
   min-width: 0;
+  overflow-x: auto;
 }
 
 .payment-actions form {
@@ -1861,28 +1878,41 @@ small,
 }
 
 .payment-button {
-  width: 34px;
-  min-height: 28px;
-  padding: 0;
+  display: inline-flex;
+  width: auto;
+  min-width: 64px;
+  min-height: 36px;
+  padding: 3px 7px;
   border: 1px solid var(--payment-color);
   border-radius: 999px;
   background: #fff;
   color: var(--payment-color);
   font-size: 11px;
   font-weight: 800;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
 }
 
-.payment-button span {
+.payment-button-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 20px;
+  min-width: 34px;
+  height: 28px;
   padding: 0 4px;
   border-radius: 999px;
   background: #fff;
   color: var(--payment-color);
   font-size: 9px;
+}
+
+.payment-button-label {
+  min-width: 20px;
+  padding: 0;
+  background: transparent;
+  font-size: 9px;
+  line-height: 1;
 }
 
 .payment-button.is-active,
@@ -2956,18 +2986,23 @@ small,
   }
 
   .payment-actions {
-    gap: 4px;
+    gap: 6px;
   }
 
   .payment-button {
-    width: 29px;
-    min-height: 25px;
+    min-width: 64px;
+    min-height: 36px;
   }
 
-  .payment-button span {
-    min-width: 25px;
-    height: 19px;
-    font-size: 8px;
+  .payment-button-icon {
+    min-width: 34px;
+    height: 28px;
+    font-size: 9px;
+  }
+
+  .payment-button-label {
+    min-width: 20px;
+    font-size: 9px;
   }
 
   .badge {

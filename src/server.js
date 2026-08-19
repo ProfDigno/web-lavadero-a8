@@ -15,6 +15,7 @@ const {
   abrirCajaSesion,
   cerrarCajaSesion,
   getCajaMovimientosElegibles,
+  getCajaCreditosPendientes,
   getCajaSesion,
   getCajaSesionAbierta,
   getCajaSesiones,
@@ -719,13 +720,14 @@ function cajaTicketText(value, maxLength = 180) {
 
 function cajaTicketHeight(detalle, resumido) {
   const formsHeight = Math.max(1, detalle.formas_pago.length) * 28;
+  const pendingCreditsHeight = 58 + Math.max(1, detalle.creditos_pendientes.length) * 25;
   const denominationsHeight = Math.max(1, detalle.denominaciones.length) * 23;
-  if (resumido) return 430 + formsHeight + denominationsHeight;
+  if (resumido) return 430 + formsHeight + pendingCreditsHeight + denominationsHeight;
   const movementsHeight = detalle.movimientos.reduce((total, movement) => {
     const textLength = cajaTicketText(`${movement.referencia || ""} ${movement.descripcion || ""}`, 220).length;
     return total + 58 + Math.ceil(textLength / 42) * 9;
   }, 0);
-  return 430 + formsHeight + denominationsHeight + movementsHeight;
+  return 430 + formsHeight + pendingCreditsHeight + denominationsHeight + movementsHeight;
 }
 
 function createCajaTicketPdf(detalle, resumido = false) {
@@ -821,6 +823,31 @@ function createCajaTicketPdf(detalle, resumido = false) {
     keyValue("Efectivo esperado", money(detalle.efectivo_esperado));
     keyValue("Efectivo contado", money(detalle.efectivo_contado));
     keyValue("Diferencia", money(detalle.diferencia));
+
+    section("CRÉDITOS PENDIENTES");
+    const pendingCreditWidths = [contentWidth * 0.48, contentWidth * 0.22, contentWidth * 0.30];
+    tableRow(["Forma de pago", "Cantidad", "Total por cobrar"], pendingCreditWidths, {
+      bold: true,
+      background: "#fff4e5",
+      color: "#9a3412",
+      alignments: ["left", "right", "right"]
+    });
+    detalle.creditos_pendientes.forEach((credito) => tableRow([
+      credito.forma_pago_nombre,
+      credito.cantidad,
+      money(credito.total)
+    ], pendingCreditWidths, { alignments: ["left", "right", "right"] }));
+    if (!detalle.creditos_pendientes.length) {
+      tableRow(["Sin créditos pendientes", "0", money(0)], pendingCreditWidths, { alignments: ["left", "right", "right"] });
+    }
+    const pendingCreditsTotal = detalle.creditos_pendientes.reduce((sum, credito) => sum + Number(credito.total || 0), 0);
+    const pendingCreditsCount = detalle.creditos_pendientes.reduce((sum, credito) => sum + Number(credito.cantidad || 0), 0);
+    tableRow(["TOTAL", pendingCreditsCount, money(pendingCreditsTotal)], pendingCreditWidths, {
+      bold: true,
+      background: "#fff4e5",
+      color: "#9a3412",
+      alignments: ["left", "right", "right"]
+    });
 
     section("FORMAS DE PAGO");
     const formWidths = [contentWidth * 0.40, contentWidth * 0.20, contentWidth * 0.20, contentWidth * 0.20];
@@ -1022,7 +1049,9 @@ function emptyCajaResumen() {
     neto: 0,
     efectivoIngresos: 0,
     efectivoEgresos: 0,
-    efectivoAContar: 0
+    efectivoAContar: 0,
+    creditosPendientesCantidad: 0,
+    creditosPendientesTotal: 0
   };
 }
 
@@ -1037,15 +1066,18 @@ function addCajaForma(formas, forma, tipo, monto) {
       forma_pago_color: forma.forma_pago_color || forma.color || "",
       ingresos: 0,
       egresos: 0,
-      neto: 0
+      neto: 0,
+      pendientes: 0,
+      pendientesCantidad: 0
     };
   }
   formas[formaId][tipo] += monto;
   formas[formaId].neto = formas[formaId].ingresos - formas[formaId].egresos;
+  return formas[formaId];
 }
 
 async function getCajaDia(fecha) {
-  const [lavadosResult, creditosResult, gastosResult, valesResult] = await Promise.all([
+  const [lavadosResult, creditosResult, creditosPendientesResult, gastosResult, valesResult] = await Promise.all([
     query(
       `select l.*, c.chapa, c.marca_modelo, c.nombre as cliente_nombre,
               coalesce(string_agg(distinct p.nombre, ', ' order by p.nombre), '') as personal_nombre,
@@ -1061,6 +1093,21 @@ async function getCajaDia(fecha) {
          and l.fk_idgrupo_cliente_creditos is null
        group by l.idlavado, c.chapa, c.marca_modelo, c.nombre, fp.nombre, fp.icono_ruta, fp.color
        order by l.idlavado desc`,
+      [fecha]
+    ),
+    query(
+      `select fp.idforma_pago as fk_idforma_pago,
+              fp.nombre as forma_pago, fp.icono_ruta as forma_pago_icono,
+              fp.color as forma_pago_color,
+              count(l.idlavado)::int as cantidad,
+              coalesce(sum(l.total), 0) as total
+       from lavados l
+       join formas_pago fp on fp.idforma_pago = l.fk_idforma_pago
+       where l.fecha_creado::date = $1
+         and l.estado = 'CREDITO'
+         and l.condicion = 'CREDITO'
+       group by fp.idforma_pago, fp.nombre, fp.icono_ruta, fp.color
+       order by fp.nombre` ,
       [fecha]
     ),
     query(
@@ -1117,6 +1164,14 @@ async function getCajaDia(fecha) {
     addCajaForma(formas, credito, "ingresos", monto);
   });
 
+  creditosPendientesResult.rows.forEach((credito) => {
+    const monto = Number(credito.total || 0);
+    const forma = addCajaForma(formas, credito, "pendientes", monto);
+    forma.pendientesCantidad += Number(credito.cantidad || 0);
+    resumen.creditosPendientesCantidad += Number(credito.cantidad || 0);
+    resumen.creditosPendientesTotal += monto;
+  });
+
   gastosResult.rows.forEach((gasto) => {
     const monto = Number(gasto.monto || 0);
     resumen.egresos += monto;
@@ -1137,12 +1192,14 @@ async function getCajaDia(fecha) {
   });
   resumen.neto = resumen.ingresos - resumen.egresos;
   resumen.efectivoAContar = resumen.efectivoIngresos - resumen.efectivoEgresos;
+  resumen.creditosPendientesTotal = Number(resumen.creditosPendientesTotal || 0);
 
   return {
     resumen,
     formas: Object.values(formas).sort((a, b) => a.forma_pago.localeCompare(b.forma_pago)),
     lavados: lavadosResult.rows,
     creditos: creditosResult.rows,
+    creditosPendientes: creditosPendientesResult.rows,
     gastos: gastosResult.rows,
     vales: valesResult.rows
   };
@@ -1511,6 +1568,9 @@ app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async
     const movimientos = sesion
       ? await getCajaMovimientosElegibles(sesion.abierta_en, new Date())
       : [];
+    const creditosPendientes = sesion
+      ? await getCajaCreditosPendientes(sesion.abierta_en, new Date())
+      : [];
     const resumen = sesion
       ? summarizeCajaMovimientos(movimientos, sesion.saldo_inicial_efectivo)
       : null;
@@ -1522,6 +1582,7 @@ app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async
       resumen,
       historial,
       detalle: null,
+      creditosPendientes,
       schemaMissing: false
     });
   } catch (error) {
@@ -1533,6 +1594,7 @@ app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async
         resumen: null,
         historial: [],
         detalle: null,
+        creditosPendientes: [],
         schemaMissing: true
       });
     }
@@ -1590,6 +1652,7 @@ app.get("/caja-cierres/:id", requireAuth, requireEvent("cierre_caja-ocultar"), a
       resumen: null,
       historial: [],
       detalle,
+      creditosPendientes: detalle.creditos_pendientes,
       schemaMissing: false
     });
   } catch (error) {
@@ -1845,7 +1908,7 @@ app.get("/lavados", requireAuth, async (req, res, next) => {
        join formas_pago fp on fp.idforma_pago = l.fk_idforma_pago
        where l.fecha_creado::date = $1
        group by l.idlavado, c.chapa, c.marca_modelo, fp.nombre, fp.icono_ruta, fp.color
-       order by ${formasPagoOrderSql("fp")}, l.idlavado desc
+       order by l.idlavado desc
        limit 100`,
       [fecha]
     );

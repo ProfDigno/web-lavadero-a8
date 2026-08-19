@@ -1,6 +1,9 @@
 <%- include('partials/header') %>
 
 <% const isDetail = Boolean(detalle); %>
+<% const pendientes = Array.isArray(creditosPendientes) ? creditosPendientes : []; %>
+<% const totalCreditosPendientes = pendientes.reduce((sum, item) => sum + Number(item.total || 0), 0); %>
+<% const cantidadCreditosPendientes = pendientes.reduce((sum, item) => sum + Number(item.cantidad || 0), 0); %>
 <div class="page-head">
   <div>
     <h1><%= isDetail ? 'Detalle de cierre' : 'Cierre de caja' %></h1>
@@ -31,6 +34,23 @@
     <article><span>Efectivo esperado</span><strong><%= formatMoney(detalle.efectivo_esperado) %></strong></article>
     <article><span>Efectivo contado</span><strong><%= formatMoney(detalle.efectivo_contado) %></strong></article>
     <article class="<%= Number(detalle.diferencia || 0) < 0 ? 'metric-warning' : '' %>"><span>Diferencia</span><strong><%= formatMoney(detalle.diferencia) %></strong></article>
+    <article><span>Créditos pendientes</span><strong><%= formatMoney(totalCreditosPendientes) %></strong><small><%= cantidadCreditosPendientes %> lavado(s), fuera del cierre</small></article>
+  </section>
+
+  <section class="panel caja-cierre-panel">
+    <h2>Créditos pendientes</h2>
+    <p>No forman parte de los ingresos, el neto ni el efectivo esperado de este cierre.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Forma de pago</th><th>Cantidad</th><th class="money-cell">Total por cobrar</th></tr></thead>
+        <tbody>
+          <% pendientes.forEach((credito) => { %>
+            <tr><td><%- include('partials/payment_chip', { nombre: credito.forma_pago_nombre, icono: credito.forma_pago_icono, color: credito.forma_pago_color }) %></td><td><%= credito.cantidad %></td><td class="money-cell"><%= formatMoney(credito.total) %></td></tr>
+          <% }) %>
+          <% if (!pendientes.length) { %><tr><td colspan="3">Sin créditos pendientes en el período.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <section class="grid two caja-cierre-grid">
@@ -102,7 +122,23 @@
         <article><span>Ingresos</span><strong><%= formatMoney(resumen.ingresos) %></strong></article>
         <article><span>Egresos</span><strong><%= formatMoney(resumen.egresos) %></strong></article>
         <article><span>Efectivo esperado</span><strong data-expected-cash="<%= resumen.efectivoEsperado %>"><%= formatMoney(resumen.efectivoEsperado) %></strong></article>
+        <article><span>Créditos pendientes</span><strong><%= formatMoney(totalCreditosPendientes) %></strong><small><%= cantidadCreditosPendientes %> lavado(s), fuera del cierre</small></article>
       </div>
+      <section class="panel caja-cierre-panel">
+        <h3>Créditos pendientes</h3>
+        <p>No forman parte de los ingresos, el neto ni el efectivo esperado de la sesión.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Forma de pago</th><th>Cantidad</th><th class="money-cell">Total por cobrar</th></tr></thead>
+            <tbody>
+              <% pendientes.forEach((credito) => { %>
+                <tr><td><%- include('partials/payment_chip', { nombre: credito.forma_pago_nombre, icono: credito.forma_pago_icono, color: credito.forma_pago_color }) %></td><td><%= credito.cantidad %></td><td class="money-cell"><%= formatMoney(credito.total) %></td></tr>
+              <% }) %>
+              <% if (!pendientes.length) { %><tr><td colspan="3">Sin créditos pendientes en el período.</td></tr><% } %>
+            </tbody>
+          </table>
+        </div>
+      </section>
       <div class="grid two caja-cierre-grid">
         <div>
           <h3>Movimientos elegibles (<%= movimientos.length %>)</h3>

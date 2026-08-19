@@ -208,13 +208,14 @@
                             data-pago-nuevo="<%= forma.nombre %>"
                             type="submit"
                             <%= Number(forma.id) === Number(lavado.fk_idforma_pago) ? 'disabled' : '' %>>
-                            <span>
+                            <span class="payment-button-icon">
                               <% if (forma.icono_ruta && String(forma.icono_ruta).startsWith('/uploads/')) { %>
                                 <img src="<%= forma.icono_ruta %>" alt="">
                               <% } else { %>
                                 <%= paymentIconLabel(forma.icono_ruta) %>
                               <% } %>
                             </span>
+                            <span class="payment-button-label"><%= String(forma.nombre || '').slice(0, 3).toUpperCase() %></span>
                           </button>
                         </form>
                       <% } %>

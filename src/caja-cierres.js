@@ -103,7 +103,8 @@ async function getCajaSesion(id, executor = { query }) {
   const session = sessionResult.rows[0] || null;
   if (!session) return null;
 
-  const [formsResult, movementsResult, denominationsResult] = await Promise.all([
+  const hasta = session.cerrada_en || new Date();
+  const [formsResult, movementsResult, denominationsResult, pendingCreditsResult] = await Promise.all([
     executor.query(
       `select *
        from caja_sesion_formas_pago
@@ -124,14 +125,16 @@ async function getCajaSesion(id, executor = { query }) {
        where fk_idcaja_sesion = $1
        order by tipo, valor desc`,
       [id]
-    )
+    ),
+    getCajaCreditosPendientes(session.abierta_en, hasta, executor)
   ]);
 
   return {
     ...session,
     formas_pago: formsResult.rows,
     movimientos: movementsResult.rows,
-    denominaciones: denominationsResult.rows
+    denominaciones: denominationsResult.rows,
+    creditos_pendientes: pendingCreditsResult
   };
 }
 
@@ -249,6 +252,26 @@ async function getCajaMovimientosElegibles(desde, hasta, executor = { query }) {
 
   return [...lavados.rows, ...creditos.rows, ...gastos.rows, ...vales.rows]
     .sort((a, b) => new Date(a.ocurrido_en) - new Date(b.ocurrido_en));
+}
+
+async function getCajaCreditosPendientes(desde, hasta, executor = { query }) {
+  const result = await executor.query(
+    `select fp.idforma_pago as fk_idforma_pago,
+            fp.nombre as forma_pago_nombre, fp.icono_ruta as forma_pago_icono,
+            fp.color as forma_pago_color,
+            count(l.idlavado)::int as cantidad,
+            coalesce(sum(l.total), 0) as total
+     from lavados l
+     join formas_pago fp on fp.idforma_pago = l.fk_idforma_pago
+     where l.fecha_creado >= $1
+       and l.fecha_creado < $2
+       and l.estado = 'CREDITO'
+       and l.condicion = 'CREDITO'
+     group by fp.idforma_pago, fp.nombre, fp.icono_ruta, fp.color
+     order by fp.nombre`,
+    [desde, hasta]
+  );
+  return result.rows;
 }
 
 async function abrirCajaSesion({ abiertaPor, saldoInicialEfectivo = 0, observaciones = null, creadoPor }) {
@@ -380,6 +403,7 @@ async function cerrarCajaSesion({ id, cerradaPor, denominaciones = [], observaci
 module.exports = {
   abrirCajaSesion,
   cerrarCajaSesion,
+  getCajaCreditosPendientes,
   getCajaMovimientosElegibles,
   getCajaSesion,
   getCajaSesionAbierta,

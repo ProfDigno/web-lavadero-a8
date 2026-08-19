@@ -29,6 +29,7 @@
   <article><span>Efectivo ingresado</span><strong><%= formatMoney(caja.resumen.efectivoIngresos) %></strong></article>
   <article><span>Efectivo egresado</span><strong><%= formatMoney(caja.resumen.efectivoEgresos) %></strong></article>
   <article class="<%= Number(caja.resumen.efectivoAContar || 0) < 0 ? 'metric-warning' : '' %>"><span>Efectivo a contar</span><strong><%= formatMoney(caja.resumen.efectivoAContar) %></strong></article>
+  <article><span>Créditos pendientes</span><strong><%= formatMoney(caja.resumen.creditosPendientesTotal) %></strong><small><%= caja.resumen.creditosPendientesCantidad %> lavado(s)</small></article>
 </section>
 
 <section class="grid one caja-grid">
@@ -41,6 +42,7 @@
             <th>Forma de pago</th>
             <th>Ingresos</th>
             <th>Egresos</th>
+            <th>Pendientes</th>
             <th>Neto</th>
           </tr>
         </thead>
@@ -50,10 +52,11 @@
               <td><%- include('partials/payment_chip', { nombre: forma.forma_pago, icono: forma.forma_pago_icono, color: forma.forma_pago_color }) %></td>
               <td class="money-cell"><%= formatMoney(forma.ingresos) %></td>
               <td class="money-cell"><%= formatMoney(forma.egresos) %></td>
+              <td class="money-cell"><%= formatMoney(forma.pendientes) %></td>
               <td class="money-cell"><strong><%= formatMoney(forma.neto) %></strong></td>
             </tr>
           <% }) %>
-          <% if (!caja.formas.length) { %><tr><td colspan="4">Sin movimientos para la fecha.</td></tr><% } %>
+          <% if (!caja.formas.length) { %><tr><td colspan="5">Sin movimientos para la fecha.</td></tr><% } %>
         </tbody>
       </table>
     </div>
