@@ -1,0 +1,118 @@
+<%- include('../partials/header') %>
+<% const efectivoFormaPago = formasPago.find((forma) => String(forma.nombre || '').toUpperCase() === 'EFECTIVO'); %>
+<div class="page-head">
+  <div>
+    <h1>Nueva venta</h1>
+    <p>Seleccione productos y confirme la operación</p>
+  </div>
+  <a class="button secondary" href="/ventas">Volver a ventas</a>
+</div>
+
+<form class="panel stack venta-form" method="post" action="/ventas" data-venta-form>
+  <div class="grid two">
+    <div class="venta-client-search" data-venta-client-box>
+      <label>
+        Buscar cliente
+        <input type="search" data-venta-client-search placeholder="Nombre, chapa, marca/modelo, RUC o teléfono" autocomplete="off">
+      </label>
+      <input type="hidden" name="fk_idcliente" data-venta-client-id>
+      <div class="client-search-results is-hidden" data-venta-client-results></div>
+      <div class="venta-selected-client is-hidden" data-venta-selected-client>
+        <span data-venta-selected-client-text></span>
+        <button type="button" class="link" data-venta-clear-client>Limpiar</button>
+      </div>
+      <small>Opcional: deje vacío para una venta de mostrador.</small>
+    </div>
+    <fieldset class="venta-payment-fieldset">
+      <legend>Forma de pago</legend>
+      <input type="hidden" name="fk_idforma_pago" value="<%= efectivoFormaPago ? efectivoFormaPago.idforma_pago : '' %>" data-venta-payment required>
+      <div class="venta-payment-options" role="group" aria-label="Forma de pago">
+        <% formasPago.forEach((forma) => { %>
+          <% const isPaymentSelected = efectivoFormaPago && Number(efectivoFormaPago.idforma_pago) === Number(forma.idforma_pago); %>
+          <button
+            type="button"
+            class="payment-button venta-payment-option <%= isPaymentSelected ? 'is-active' : '' %>"
+            style="--payment-color: <%= forma.color || '#687385' %>"
+            data-venta-payment-option="<%= forma.idforma_pago %>"
+            aria-pressed="<%= isPaymentSelected ? 'true' : 'false' %>"
+            title="<%= forma.nombre %>">
+            <span class="payment-button-icon">
+              <% if (forma.icono_ruta && String(forma.icono_ruta).startsWith('/uploads/')) { %>
+                <img src="<%= forma.icono_ruta %>" alt="">
+              <% } else { %>
+                <%= paymentIconLabel(forma.icono_ruta) %>
+              <% } %>
+            </span>
+            <span class="venta-payment-option-label"><%= forma.nombre %></span>
+          </button>
+        <% }) %>
+      </div>
+    </fieldset>
+    <fieldset class="venta-condition-fieldset">
+      <legend>Condición</legend>
+      <input type="hidden" name="condicion" value="CONTADO" data-venta-condition>
+      <label class="venta-condition-option">
+        <input type="checkbox" checked data-venta-condition-option="CONTADO">
+        <span>CONTADO</span>
+      </label>
+      <label class="venta-condition-option">
+        <input type="checkbox" data-venta-condition-option="CREDITO">
+        <span>CREDITO</span>
+      </label>
+    </fieldset>
+  </div>
+
+  <div class="section-title venta-items-heading">
+    <div><h2>Productos</h2><p>Los precios se toman del catálogo y quedan guardados en la venta.</p></div>
+    <button type="button" class="secondary" data-add-venta-item>Agregar producto</button>
+  </div>
+
+  <div class="table-wrap venta-items-table-wrap">
+    <table class="venta-items-table">
+      <thead><tr><th>Producto</th><th>Stock</th><th>Precio</th><th>Cantidad</th><th class="money-cell">Subtotal</th><th></th></tr></thead>
+      <tbody data-venta-items>
+        <tr data-venta-item>
+          <td>
+            <select name="producto_id[]" required data-venta-product>
+              <option value="">Seleccione producto</option>
+              <% productos.forEach((producto) => { %>
+                <option value="<%= producto.idproducto %>" data-price="<%= producto.precio_venta %>" data-stock="<%= producto.stock_actual %>"><%= producto.codigo %> — <%= producto.nombre %></option>
+              <% }) %>
+            </select>
+          </td>
+          <td data-venta-stock>—</td>
+          <td class="money-cell" data-venta-price>Gs. 0</td>
+          <td><input name="cantidad[]" type="number" min="1" step="1" value="1" required data-venta-quantity></td>
+          <td class="money-cell" data-venta-subtotal>Gs. 0</td>
+          <td><button type="button" class="link" data-remove-venta-item>Quitar</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="venta-total-box"><span>Total</span><strong data-venta-total>Gs. 0</strong></div>
+  <div class="actions">
+    <button type="submit">Registrar venta</button>
+    <a class="button secondary" href="/ventas">Cancelar</a>
+  </div>
+</form>
+
+<template data-venta-item-template>
+  <tr data-venta-item>
+    <td>
+      <select name="producto_id[]" required data-venta-product>
+        <option value="">Seleccione producto</option>
+        <% productos.forEach((producto) => { %>
+          <option value="<%= producto.idproducto %>" data-price="<%= producto.precio_venta %>" data-stock="<%= producto.stock_actual %>"><%= producto.codigo %> — <%= producto.nombre %></option>
+        <% }) %>
+      </select>
+    </td>
+    <td data-venta-stock>—</td>
+    <td class="money-cell" data-venta-price>Gs. 0</td>
+    <td><input name="cantidad[]" type="number" min="1" step="1" value="1" required data-venta-quantity></td>
+    <td class="money-cell" data-venta-subtotal>Gs. 0</td>
+    <td><button type="button" class="link" data-remove-venta-item>Quitar</button></td>
+  </tr>
+</template>
+<script src="/js/ventas.js?v=20260821-3"></script>
+<%- include('../partials/footer') %>

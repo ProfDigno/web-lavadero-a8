@@ -20,6 +20,10 @@
   const totalCreditos = caja.creditos.reduce((sum, item) => sum + Number(item.total || 0), 0);
   const totalGastos = caja.gastos.reduce((sum, item) => sum + Number(item.monto || 0), 0);
   const totalVales = caja.vales.reduce((sum, item) => sum + Number(item.monto || 0), 0);
+  const ventasIngresos = caja.ventas.filter((item) => item.tipo_movimiento === 'INGRESO');
+  const ventasReversiones = caja.ventas.filter((item) => item.tipo_movimiento === 'EGRESO');
+  const totalVentas = ventasIngresos.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const totalReversiones = ventasReversiones.reduce((sum, item) => sum + Number(item.total || 0), 0);
 %>
 
 <section class="metrics">
@@ -29,7 +33,61 @@
   <article><span>Efectivo ingresado</span><strong><%= formatMoney(caja.resumen.efectivoIngresos) %></strong></article>
   <article><span>Efectivo egresado</span><strong><%= formatMoney(caja.resumen.efectivoEgresos) %></strong></article>
   <article class="<%= Number(caja.resumen.efectivoAContar || 0) < 0 ? 'metric-warning' : '' %>"><span>Efectivo a contar</span><strong><%= formatMoney(caja.resumen.efectivoAContar) %></strong></article>
-  <article><span>Créditos pendientes</span><strong><%= formatMoney(caja.resumen.creditosPendientesTotal) %></strong><small><%= caja.resumen.creditosPendientesCantidad %> lavado(s)</small></article>
+  <article><span>Créditos pendientes</span><strong><%= formatMoney(caja.resumen.creditosPendientesTotal) %></strong><small><%= caja.resumen.creditosPendientesCantidad %> operación(es)</small></article>
+</section>
+
+<section class="grid two caja-grid">
+  <div>
+    <div class="section-title compact-title">
+      <div><h2>Ingresos por ventas</h2><small>Ventas pagadas del día</small></div>
+      <strong class="section-total"><%= formatMoney(totalVentas) %></strong>
+    </div>
+    <div class="table-wrap caja-table-wrap">
+      <table>
+        <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>Condición</th><th>Estado</th><th>Total</th></tr></thead>
+        <tbody>
+          <% ventasIngresos.forEach((venta) => { %>
+            <tr>
+              <td><a href="/ventas/<%= venta.id %>"><strong><%= venta.numero %></strong></a></td>
+              <td><%= formatDateTimeShort(venta.fecha_efectiva) %></td>
+              <td><%= [venta.chapa, venta.marca_modelo, venta.cliente_nombre].filter(Boolean).join(' - ') || 'Mostrador' %></td>
+              <td><%- include('partials/payment_chip', { nombre: venta.forma_pago, icono: venta.forma_pago_icono, color: venta.forma_pago_color }) %></td>
+              <td><span class="venta-condition-badge <%= venta.condicion === 'CREDITO' ? 'is-credit' : 'is-cash' %>"><%= venta.condicion %></span></td>
+              <td><span class="badge pagado"><%= venta.estado %></span></td>
+              <td class="money-cell"><%= formatMoney(venta.total) %></td>
+            </tr>
+          <% }) %>
+          <% if (!ventasIngresos.length) { %><tr><td colspan="7">Sin ventas pagadas para la fecha.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-title compact-title">
+      <div><h2>Reversiones de ventas</h2><small>Ventas anuladas previamente pagadas</small></div>
+      <strong class="section-total"><%= formatMoney(totalReversiones) %></strong>
+    </div>
+    <div class="table-wrap caja-table-wrap">
+      <table>
+        <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>Condición</th><th>Estado</th><th>Total</th></tr></thead>
+        <tbody>
+          <% ventasReversiones.forEach((venta) => { %>
+            <tr class="caja-venta-reversion">
+              <td><a href="/ventas/<%= venta.id %>"><strong><%= venta.numero %></strong></a></td>
+              <td><%= formatDateTimeShort(venta.fecha_efectiva) %></td>
+              <td><%= [venta.chapa, venta.marca_modelo, venta.cliente_nombre].filter(Boolean).join(' - ') || 'Mostrador' %></td>
+              <td><%- include('partials/payment_chip', { nombre: venta.forma_pago, icono: venta.forma_pago_icono, color: venta.forma_pago_color }) %></td>
+              <td><span class="venta-condition-badge <%= venta.condicion === 'CREDITO' ? 'is-credit' : 'is-cash' %>"><%= venta.condicion %></span></td>
+              <td><span class="badge anulado">ANULADO</span></td>
+              <td class="money-cell"><%= formatMoney(venta.total) %></td>
+            </tr>
+          <% }) %>
+          <% if (!ventasReversiones.length) { %><tr><td colspan="7">Sin reversiones para la fecha.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 
 <section class="grid one caja-grid">
@@ -57,6 +115,32 @@
             </tr>
           <% }) %>
           <% if (!caja.formas.length) { %><tr><td colspan="5">Sin movimientos para la fecha.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="grid two caja-grid">
+  <div>
+    <div class="section-title compact-title">
+      <div><h2>Ventas crédito pendientes</h2><small>No forman parte de los ingresos</small></div>
+      <strong class="section-total"><%= formatMoney(caja.ventasPendientes.reduce((sum, item) => sum + Number(item.total || 0), 0)) %></strong>
+    </div>
+    <div class="table-wrap caja-table-wrap">
+      <table>
+        <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Pago</th><th>Total</th></tr></thead>
+        <tbody>
+          <% caja.ventasPendientes.forEach((venta) => { %>
+            <tr>
+              <td><a href="/ventas/<%= venta.id %>"><strong><%= venta.numero %></strong></a></td>
+              <td><%= formatDateTimeShort(venta.fecha_venta) %></td>
+              <td><%= [venta.chapa, venta.marca_modelo, venta.cliente_nombre].filter(Boolean).join(' - ') || 'Mostrador' %></td>
+              <td><%- include('partials/payment_chip', { nombre: venta.forma_pago, icono: venta.forma_pago_icono, color: venta.forma_pago_color }) %></td>
+              <td class="money-cell"><%= formatMoney(venta.total) %></td>
+            </tr>
+          <% }) %>
+          <% if (!caja.ventasPendientes.length) { %><tr><td colspan="5">Sin ventas crédito pendientes para la fecha.</td></tr><% } %>
         </tbody>
       </table>
     </div>

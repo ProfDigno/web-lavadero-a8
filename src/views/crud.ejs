@@ -1,7 +1,7 @@
 <%- include('partials/header') %>
-<% const modalCrud = ['clientes', 'servicios', 'servicio-grupos', 'personal', 'grupo-clientes', 'formas-pago', 'gasto-tipos'].includes(pathName); %>
-<% const entityLabel = pathName === 'clientes' ? 'cliente' : (pathName === 'servicios' ? 'servicio' : (pathName === 'servicio-grupos' ? 'grupo de servicio' : (pathName === 'personal' ? 'personal' : (pathName === 'grupo-clientes' ? 'grupo de cliente' : (pathName === 'formas-pago' ? 'forma de pago' : (pathName === 'gasto-tipos' ? 'tipo de gasto' : 'registro')))))); %>
-<% const newEntityLabel = pathName === 'formas-pago' ? 'Nueva forma de pago' : 'Nuevo ' + entityLabel; %>
+<% const modalCrud = ['clientes', 'servicios', 'servicio-grupos', 'personal', 'grupo-clientes', 'formas-pago', 'gasto-tipos', 'producto-categorias', 'productos'].includes(pathName); %>
+<% const entityLabel = pathName === 'clientes' ? 'cliente' : (pathName === 'servicios' ? 'servicio' : (pathName === 'servicio-grupos' ? 'grupo de servicio' : (pathName === 'personal' ? 'personal' : (pathName === 'grupo-clientes' ? 'grupo de cliente' : (pathName === 'formas-pago' ? 'forma de pago' : (pathName === 'gasto-tipos' ? 'tipo de gasto' : (pathName === 'producto-categorias' ? 'categoria de producto' : (pathName === 'productos' ? 'producto' : 'registro')))))))); %>
+<% const newEntityLabel = pathName === 'formas-pago' ? 'Nueva forma de pago' : (pathName === 'producto-categorias' ? 'Nueva categoria' : 'Nuevo ' + entityLabel); %>
 <% const serviceModule = ['servicios', 'servicio-grupos'].includes(pathName); %>
 <% const canMutate = !serviceModule || canEvent('servicio-ocultar'); %>
 <% const tableFields = pathName === 'clientes'
@@ -10,6 +10,10 @@
     ? ['nombre', 'razon_social', 'ruc', 'telefono', 'es_credito'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
   : pathName === 'formas-pago'
     ? ['nombre', 'icono_ruta', 'color', 'mostrar_despues_crear'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
+  : pathName === 'productos'
+    ? ['codigo', 'nombre', 'fk_idproducto_categoria', 'precio_venta', 'stock_actual'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
+  : pathName === 'producto-categorias'
+    ? ['nombre', 'descripcion'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
   : fields.slice(0, 3); %>
 <% const tableColspan = tableFields.length + (modalCrud ? 2 : 3); %>
 <% const meta = listMeta || { q: '', limit: null, offset: 0, total: items.length, isPaged: false }; %>
@@ -47,8 +51,8 @@
       <% } else if (field.type === 'select') { %>
         <label>
           <%= field.label %>
-          <select name="<%= field.name %>">
-            <option value="">Sin grupo</option>
+          <select name="<%= field.name %>" <%= field.required ? 'required' : '' %>>
+            <% if (field.allowEmpty !== false) { %><option value="">Sin grupo</option><% } %>
             <% (optionsByField[field.name] || []).forEach((option) => { %>
               <option
                 value="<%= option.id %>"
@@ -90,10 +94,11 @@
           <%= field.label %>
             <input
             name="<%= field.name %>"
-            type="<%= field.type === 'color' ? 'color' : (field.type === 'email' ? 'email' : 'text') %>"
+            type="<%= field.type === 'color' ? 'color' : (field.type === 'email' ? 'email' : (field.type === 'integer' ? 'number' : 'text')) %>"
             class="<%= field.type === 'money' ? 'money-input' : '' %>"
             value="<%= editItem && editItem[field.name] != null ? (field.type === 'money' ? formatMoney(editItem[field.name]) : editItem[field.name]) : '' %>"
             <%= field.type === 'money' ? 'inputmode="numeric" data-money-input' : '' %>
+            <%= field.type === 'integer' ? 'inputmode="numeric" min="0" step="1"' : '' %>
             <%= field.uppercase ? 'data-uppercase' : '' %>
             <%= field.required ? 'required' : '' %>>
         </label>
@@ -506,8 +511,8 @@
         <% } else if (field.type === 'select') { %>
           <label>
             <%= field.label %>
-            <select name="<%= field.name %>">
-              <option value="">Sin grupo</option>
+          <select name="<%= field.name %>" <%= field.required ? 'required' : '' %>>
+              <% if (field.allowEmpty !== false) { %><option value="">Sin grupo</option><% } %>
               <% (optionsByField[field.name] || []).forEach((option) => { %>
                 <option
                   value="<%= option.id %>"
@@ -548,11 +553,12 @@
           <label>
             <%= field.label %>
             <input
-              name="<%= field.name %>"
-              type="<%= field.type === 'color' ? 'color' : (field.type === 'email' ? 'email' : 'text') %>"
-              class="<%= field.type === 'money' ? 'money-input' : '' %>"
-              value="<%= editItem && editItem[field.name] != null ? (field.type === 'money' ? formatMoney(editItem[field.name]) : editItem[field.name]) : '' %>"
-              <%= field.type === 'money' ? 'inputmode="numeric" data-money-input' : '' %>
+            name="<%= field.name %>"
+            type="<%= field.type === 'color' ? 'color' : (field.type === 'email' ? 'email' : (field.type === 'integer' ? 'number' : 'text')) %>"
+            class="<%= field.type === 'money' ? 'money-input' : '' %>"
+            value="<%= editItem && editItem[field.name] != null ? (field.type === 'money' ? formatMoney(editItem[field.name]) : editItem[field.name]) : '' %>"
+            <%= field.type === 'money' ? 'inputmode="numeric" data-money-input' : '' %>
+            <%= field.type === 'integer' ? 'inputmode="numeric" min="0" step="1"' : '' %>
               <%= field.uppercase ? 'data-uppercase' : '' %>
               <%= field.required ? 'required' : '' %>>
           </label>

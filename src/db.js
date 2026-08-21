@@ -22,12 +22,16 @@ const TABLE_PRIMARY_KEYS = {
   lavado_servicios: "idlavado_servicios",
   lavados: "idlavado",
   personal: "idpersonal",
+  producto: "idproducto",
+  producto_categoria: "idproducto_categoria",
   servicio_grupo: "idservicio_grupo",
   servicios: "idservicio",
   usuario_roll: "idusuario_roll",
   usuario_roll_evento: "idusuario_roll_evento",
   usuario_roll_item: "idusuario_roll_item",
   usuarios: "idusuario",
+  venta: "idventa",
+  venta_item: "idventa_item",
   vales_personal: "idvales_personal"
 };
 

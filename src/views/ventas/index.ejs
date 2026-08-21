@@ -1,0 +1,91 @@
+<%- include('../partials/header') %>
+<div class="page-head">
+  <div>
+    <h1>Ventas</h1>
+    <p>Registro y consulta de ventas de productos</p>
+  </div>
+  <% if (canEvent('venta-ocultar')) { %>
+    <a class="button" href="/ventas/nueva">Nueva venta</a>
+  <% } %>
+</div>
+
+<section class="panel ventas-panel">
+  <form class="ventas-filters" method="get" action="/ventas">
+    <label>
+      Desde
+      <input type="date" name="desde" value="<%= filters.desde %>">
+    </label>
+    <label>
+      Hasta
+      <input type="date" name="hasta" value="<%= filters.hasta %>">
+    </label>
+    <label class="ventas-client-filter">
+      Cliente
+      <input type="search" name="cliente" value="<%= filters.cliente %>" placeholder="Nombre, chapa, marca/modelo, RUC o teléfono">
+    </label>
+    <fieldset class="ventas-condition-filter">
+      <legend>Condición</legend>
+      <label>
+        <input type="checkbox" name="condicion" value="CONTADO" <%= filters.condiciones.includes('CONTADO') ? 'checked' : '' %>>
+        <span class="is-cash">CONTADO</span>
+      </label>
+      <label>
+        <input type="checkbox" name="condicion" value="CREDITO" <%= filters.condiciones.includes('CREDITO') ? 'checked' : '' %>>
+        <span class="is-credit">CREDITO</span>
+      </label>
+    </fieldset>
+    <div class="ventas-filter-actions">
+      <button type="submit">Filtrar</button>
+      <a class="button secondary" href="/ventas">Limpiar</a>
+    </div>
+  </form>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Número</th>
+          <th>Fecha</th>
+          <th>Cliente</th>
+          <th>Forma de pago</th>
+          <th>Condición</th>
+          <th>Estado</th>
+          <th>Ítems</th>
+          <th class="money-cell">Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% ventas.forEach((venta) => { %>
+          <tr class="<%= venta.estado === 'ANULADO' ? 'row-inactive' : '' %>">
+            <td><strong><%= venta.numero %></strong></td>
+            <td><%= formatDateTimeShort(venta.fecha_venta) %></td>
+            <td><%= venta.cliente_nombre %></td>
+            <td><span class="venta-payment-name" style="--venta-payment-color: <%= venta.forma_pago_color || '#687385' %>"><%= venta.forma_pago %></span></td>
+            <td><span class="venta-condition-badge <%= venta.condicion === 'CREDITO' ? 'is-credit' : 'is-cash' %>"><%= venta.condicion %></span></td>
+            <td><span class="badge <%= venta.estado.toLowerCase() %>"><%= venta.estado %></span></td>
+            <td><%= venta.cantidad_items %></td>
+            <td class="money-cell"><%= formatMoney(venta.total) %></td>
+            <td class="cell-actions"><a href="/ventas/<%= venta.idventa %>">Ver</a></td>
+          </tr>
+        <% }) %>
+        <% if (!ventas.length) { %><tr><td colspan="9">Todavía no hay ventas registradas.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <% const ventasPageUrl = (targetPage) => { const params = new URLSearchParams(); if (filters.desde) params.set('desde', filters.desde); if (filters.hasta) params.set('hasta', filters.hasta); if (filters.cliente) params.set('cliente', filters.cliente); filters.condiciones.forEach((condition) => params.append('condicion', condition)); params.set('pagina', String(targetPage)); return `/ventas?${params.toString()}`; }; %>
+  <% const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.pageSize)); %>
+  <nav class="ventas-pagination" aria-label="Paginación de ventas">
+    <% if (pagination.page > 1) { %>
+      <a class="button secondary" href="<%= ventasPageUrl(pagination.page - 1) %>">Anterior</a>
+    <% } else { %>
+      <span class="button secondary is-disabled">Anterior</span>
+    <% } %>
+    <span>Página <strong><%= pagination.page %></strong> de <strong><%= totalPages %></strong> · <%= pagination.total %> ventas</span>
+    <% if (pagination.page < totalPages) { %>
+      <a class="button secondary" href="<%= ventasPageUrl(pagination.page + 1) %>">Siguiente</a>
+    <% } else { %>
+      <span class="button secondary is-disabled">Siguiente</span>
+    <% } %>
+  </nav>
+</section>
+<%- include('../partials/footer') %>

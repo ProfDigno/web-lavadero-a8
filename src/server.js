@@ -13,15 +13,26 @@ const config = require("./config");
 const { query, withTransaction } = require("./db");
 const {
   abrirCajaSesion,
+  cajaDateRange,
   cerrarCajaSesion,
+  editarSaldoInicialCaja,
   getCajaMovimientosElegibles,
   getCajaCreditosPendientes,
   getCajaSesion,
   getCajaSesionAbierta,
   getCajaSesiones,
-  summarizeCajaMovimientos
+  summarizeCajaMovimientos,
+  sincronizarCajaSesionAbierta
 } = require("./caja-cierres");
 const { startTelegramBot } = require("./telegram-bot");
+const {
+  anularVenta,
+  crearVenta,
+  getVentaOptions,
+  listarVentas,
+  marcarVentaPagada,
+  obtenerVenta
+} = require("./ventas");
 
 const app = express();
 const servicioGrupoUploadsDir = path.join(__dirname, "..", "public", "uploads", "servicio-grupos");
@@ -164,6 +175,9 @@ function userErrorMessage(error) {
       grupo_cliente_nombre_key: "Ya existe un grupo de cliente con ese nombre.",
       formas_pago_nombre_key: "Ya existe una forma de pago con ese nombre.",
       gasto_tipo_nombre_key: "Ya existe un tipo de gasto con ese nombre.",
+      producto_categoria_nombre_key: "Ya existe una categoria de productos con ese nombre.",
+      producto_codigo_key: "Ya existe un producto con ese codigo.",
+      venta_numero_key: "Ya existe ese numero de venta.",
       usuarios_login_key: "Ya existe un usuario con ese login.",
       usuario_roll_roll_key: "Ya existe ese rol.",
       usuario_roll_evento_codigo_key: "Ya existe ese evento para el rol seleccionado.",
@@ -1077,7 +1091,7 @@ function addCajaForma(formas, forma, tipo, monto) {
 }
 
 async function getCajaDia(fecha) {
-  const [lavadosResult, creditosResult, creditosPendientesResult, gastosResult, valesResult] = await Promise.all([
+  const [lavadosResult, creditosResult, creditosPendientesResult, gastosResult, valesResult, ventasResult, ventasPendientesResult] = await Promise.all([
     query(
       `select l.*, c.chapa, c.marca_modelo, c.nombre as cliente_nombre,
               coalesce(string_agg(distinct p.nombre, ', ' order by p.nombre), '') as personal_nombre,
@@ -1146,6 +1160,79 @@ async function getCajaDia(fecha) {
          and v.estado <> 'ANULADO'
        order by v.idvales_personal desc`,
       [fecha]
+    ),
+    query(
+      `select * from (
+         select v.idventa as id,
+                v.numero,
+                case when v.condicion = 'CREDITO' then v.pagado_en else v.fecha_venta end as fecha_efectiva,
+                v.condicion,
+                v.estado,
+                v.total,
+                v.fk_idforma_pago,
+                'INGRESO' as tipo_movimiento,
+                c.chapa,
+                c.marca_modelo,
+                c.nombre as cliente_nombre,
+                fp.nombre as forma_pago,
+                fp.icono_ruta as forma_pago_icono,
+                fp.color as forma_pago_color
+         from venta v
+         left join clientes c on c.idcliente = v.fk_idcliente
+         join formas_pago fp on fp.idforma_pago = v.fk_idforma_pago
+         where v.estado = 'PAGADO'
+           and ((v.condicion = 'CONTADO' and v.fecha_venta::date = $1)
+             or (v.condicion = 'CREDITO' and v.pagado_en::date = $1))
+         union all
+         select v.idventa as id,
+                v.numero,
+                v.anulado_en as fecha_efectiva,
+                v.condicion,
+                v.estado,
+                v.total,
+                v.fk_idforma_pago,
+                'EGRESO' as tipo_movimiento,
+                c.chapa,
+                c.marca_modelo,
+                c.nombre as cliente_nombre,
+                fp.nombre as forma_pago,
+                fp.icono_ruta as forma_pago_icono,
+                fp.color as forma_pago_color
+         from venta v
+         left join clientes c on c.idcliente = v.fk_idcliente
+         join formas_pago fp on fp.idforma_pago = v.fk_idforma_pago
+         where v.estado = 'ANULADO'
+           and v.anulado_en::date = $1
+           and v.total > 0
+           and exists (
+             select 1 from caja_sesion_movimientos csm
+             where csm.fk_idventa = v.idventa
+               and csm.tipo = 'INGRESO'
+           )
+       ) ventas_dia
+       order by fecha_efectiva desc, id desc`,
+      [fecha]
+    ),
+    query(
+      `select v.idventa as id,
+              v.numero,
+              v.fecha_venta,
+              v.total,
+              v.fk_idforma_pago,
+              c.chapa,
+              c.marca_modelo,
+              c.nombre as cliente_nombre,
+              fp.nombre as forma_pago,
+              fp.icono_ruta as forma_pago_icono,
+              fp.color as forma_pago_color
+       from venta v
+       left join clientes c on c.idcliente = v.fk_idcliente
+       join formas_pago fp on fp.idforma_pago = v.fk_idforma_pago
+       where v.condicion = 'CREDITO'
+         and v.estado = 'PENDIENTE'
+         and v.fecha_venta::date = $1
+       order by v.fecha_venta desc, v.idventa desc`,
+      [fecha]
     )
   ]);
 
@@ -1184,6 +1271,21 @@ async function getCajaDia(fecha) {
     addCajaForma(formas, vale, "egresos", monto);
   });
 
+  ventasResult.rows.forEach((venta) => {
+    const monto = Number(venta.total || 0);
+    if (venta.tipo_movimiento === "INGRESO") resumen.ingresos += monto;
+    else resumen.egresos += monto;
+    addCajaForma(formas, venta, venta.tipo_movimiento === "INGRESO" ? "ingresos" : "egresos", monto);
+  });
+
+  ventasPendientesResult.rows.forEach((venta) => {
+    const monto = Number(venta.total || 0);
+    const forma = addCajaForma(formas, venta, "pendientes", monto);
+    forma.pendientesCantidad += 1;
+    resumen.creditosPendientesCantidad += 1;
+    resumen.creditosPendientesTotal += monto;
+  });
+
   Object.values(formas).forEach((forma) => {
     if (String(forma.forma_pago || "").toUpperCase() === "EFECTIVO") {
       resumen.efectivoIngresos += forma.ingresos;
@@ -1201,7 +1303,9 @@ async function getCajaDia(fecha) {
     creditos: creditosResult.rows,
     creditosPendientes: creditosPendientesResult.rows,
     gastos: gastosResult.rows,
-    vales: valesResult.rows
+    vales: valesResult.rows,
+    ventas: ventasResult.rows,
+    ventasPendientes: ventasPendientesResult.rows
   };
 }
 
@@ -1489,7 +1593,7 @@ app.post("/logout", (req, res) => {
 app.get("/", requireAuth, async (req, res, next) => {
   try {
     const fecha = req.query.fecha || todayIso();
-    const [caja, resumen, comisiones, ultimos, formasPago] = await Promise.all([
+    const [caja, resumen, resumenMes, comisiones, ultimos, formasPago] = await Promise.all([
       getCajaDia(fecha),
       query(
         `select
@@ -1501,8 +1605,14 @@ app.get("/", requireAuth, async (req, res, next) => {
           coalesce(sum(total) filter (where estado <> 'ANULADO'), 0) as total,
           coalesce(sum(comision_personal) filter (where estado <> 'ANULADO'), 0) as comision,
           coalesce(sum(saldo_lavadero) filter (where estado <> 'ANULADO'), 0) as saldo
-         from lavados
+        from lavados
          where fecha_creado::date = $1`,
+        [fecha]
+      ),
+      query(
+        `select coalesce(sum(total) filter (where estado <> 'ANULADO'), 0) as total
+         from lavados
+         where fecha_creado::date between date_trunc('month', $1::date)::date and $1::date`,
         [fecha]
       ),
       query(
@@ -1543,6 +1653,7 @@ app.get("/", requireAuth, async (req, res, next) => {
       fecha,
       caja,
       resumen: resumen.rows[0],
+      resumenMes: resumenMes.rows[0],
       comisiones: comisiones.rows,
       ultimos: ultimos.rows,
       formasPago: formasPago.rows
@@ -1565,11 +1676,27 @@ app.get("/caja", requireAuth, requireEvent("caja-ocultar"), async (req, res, nex
 app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res, next) => {
   try {
     const sesion = await getCajaSesionAbierta();
-    const movimientos = sesion
-      ? await getCajaMovimientosElegibles(sesion.abierta_en, new Date())
+    if (sesion) await sincronizarCajaSesionAbierta();
+    const rangoSesion = sesion ? { desde: sesion.abierta_en, hasta: new Date() } : null;
+    const movimientosElegibles = sesion
+      ? await getCajaMovimientosElegibles(rangoSesion.desde, rangoSesion.hasta)
       : [];
+    const detalleSesion = sesion ? await getCajaSesion(sesion.idcaja_sesion) : null;
+    const movimientosRegistrados = detalleSesion?.movimientos || [];
+    const movimientoKey = (movimiento) => {
+      const sourceId = movimiento.source_id
+        ?? movimiento.fk_idlavado
+        ?? movimiento.fk_idgrupo_cliente_creditos
+        ?? movimiento.fk_idgasto
+        ?? movimiento.fk_idvales_personal
+        ?? movimiento.fk_idventa;
+      return `${movimiento.origen}:${movimiento.tipo}:${sourceId ?? `${movimiento.ocurrido_en}:${movimiento.referencia || ''}`}`;
+    };
+    const movimientos = [...movimientosRegistrados, ...movimientosElegibles].filter((movimiento, index, all) =>
+      all.findIndex((candidate) => movimientoKey(candidate) === movimientoKey(movimiento)) === index
+    );
     const creditosPendientes = sesion
-      ? await getCajaCreditosPendientes(sesion.abierta_en, new Date())
+      ? await getCajaCreditosPendientes(rangoSesion.desde, rangoSesion.hasta)
       : [];
     const resumen = sesion
       ? summarizeCajaMovimientos(movimientos, sesion.saldo_inicial_efectivo)
@@ -1663,6 +1790,21 @@ app.get("/caja-cierres/:id", requireAuth, requireEvent("cierre_caja-ocultar"), a
   }
 });
 
+app.post("/caja-cierres/:id/saldo-inicial", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res) => {
+  const id = Number(req.params.id);
+  try {
+    const rawSaldo = String(req.body.saldo_inicial_efectivo ?? "").trim().replace(",", ".");
+    const saldoInicialEfectivo = Number(rawSaldo);
+    if (!rawSaldo || !Number.isFinite(saldoInicialEfectivo)) throw new Error("Ingrese un saldo inicial válido.");
+    if (saldoInicialEfectivo < 0) throw new Error("El saldo inicial no puede ser negativo.");
+    await editarSaldoInicialCaja({ id, saldoInicialEfectivo });
+    setFlash(req, "success", "El saldo inicial y los valores dependientes fueron actualizados correctamente.");
+  } catch (error) {
+    setFlash(req, "error", cajaCierresSchemaMissing(error) ? cajaCierresSchemaMessage() : userErrorMessage(error));
+  }
+  res.redirect(`/caja-cierres/${id}`);
+});
+
 app.post("/caja-cierres/:id/cerrar", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res) => {
   const id = Number(req.params.id);
   try {
@@ -1679,6 +1821,135 @@ app.post("/caja-cierres/:id/cerrar", requireAuth, requireEvent("cierre_caja-ocul
   } catch (error) {
     setFlash(req, "error", cajaCierresSchemaMissing(error) ? cajaCierresSchemaMessage() : userErrorMessage(error));
     return res.redirect("/caja-cierres");
+  }
+});
+
+app.get("/analisis-ventas", requireAuth, requireEvent("AnalisisVenta-ocultar"), async (req, res, next) => {
+  try {
+    let fechaInicio = String(req.query.fecha_inicio || todayIso()).trim();
+    let fechaFin = String(req.query.fecha_fin || fechaInicio).trim();
+    if (fechaFin < fechaInicio) {
+      const fechaTemp = fechaInicio;
+      fechaInicio = fechaFin;
+      fechaFin = fechaTemp;
+    }
+    const params = [fechaInicio, fechaFin];
+    const [metricsResult, dailyResult, paymentsResult, productsResult, clientsResult] = await Promise.all([
+      query(
+        `select
+           count(*) filter (where v.estado <> 'ANULADO')::int as ventas,
+           coalesce(sum(v.total) filter (where v.estado <> 'ANULADO'), 0) as total,
+           count(*) filter (where v.condicion = 'CONTADO' and v.estado <> 'ANULADO')::int as contado,
+           count(*) filter (where v.condicion = 'CREDITO' and v.estado <> 'ANULADO')::int as credito,
+           count(*) filter (where v.condicion = 'CREDITO' and v.estado = 'PENDIENTE')::int as creditos_pendientes,
+           count(*) filter (where v.estado = 'ANULADO')::int as anuladas,
+           (select coalesce(sum(vi.cantidad), 0)
+              from venta_item vi join venta vx on vx.idventa = vi.fk_idventa
+             where vx.fecha_venta::date between $1 and $2 and vx.estado <> 'ANULADO') as unidades
+         from venta v
+         where v.fecha_venta::date between $1 and $2`,
+        params
+      ),
+      query(
+        `select v.fecha_venta::date as fecha,
+                count(*)::int as ventas,
+                coalesce(sum(v.total), 0) as total
+         from venta v
+         where v.fecha_venta::date between $1 and $2
+           and v.estado <> 'ANULADO'
+         group by v.fecha_venta::date
+         order by fecha`,
+        params
+      ),
+      query(
+        `select fp.nombre, fp.color,
+                count(v.idventa)::int as cantidad,
+                coalesce(sum(v.total), 0) as total
+         from venta v
+         join formas_pago fp on fp.idforma_pago = v.fk_idforma_pago
+         where v.fecha_venta::date between $1 and $2
+           and v.estado <> 'ANULADO'
+         group by fp.idforma_pago, fp.nombre, fp.color
+         order by total desc, cantidad desc, fp.nombre`,
+        params
+      ),
+      query(
+        `select p.codigo, p.nombre,
+                coalesce(sum(vi.cantidad), 0)::int as cantidad,
+                coalesce(sum(vi.subtotal), 0) as total
+         from venta_item vi
+         join venta v on v.idventa = vi.fk_idventa
+         join producto p on p.idproducto = vi.fk_idproducto
+         where v.fecha_venta::date between $1 and $2
+           and v.estado <> 'ANULADO'
+         group by p.idproducto, p.codigo, p.nombre
+         order by cantidad desc, total desc, p.nombre
+         limit 10`,
+        params
+      ),
+      query(
+        `select c.idcliente,
+                coalesce(nullif(concat_ws(' - ', nullif(trim(c.chapa), ''), nullif(trim(c.marca_modelo), '')), ''), c.nombre) as nombre,
+                count(v.idventa)::int as cantidad,
+                coalesce(sum(v.total), 0) as total
+         from venta v
+         join clientes c on c.idcliente = v.fk_idcliente
+         where v.fecha_venta::date between $1 and $2
+           and v.estado <> 'ANULADO'
+         group by c.idcliente, c.chapa, c.marca_modelo, c.nombre
+         order by total desc, cantidad desc, nombre
+         limit 10`,
+        params
+      )
+    ]);
+
+    const rawMetrics = metricsResult.rows[0] || {};
+    const metrics = {
+      ventas: Number(rawMetrics.ventas || 0),
+      total: Number(rawMetrics.total || 0),
+      contado: Number(rawMetrics.contado || 0),
+      credito: Number(rawMetrics.credito || 0),
+      creditos_pendientes: Number(rawMetrics.creditos_pendientes || 0),
+      anuladas: Number(rawMetrics.anuladas || 0),
+      unidades: Number(rawMetrics.unidades || 0)
+    };
+    metrics.ticket_promedio = metrics.ventas ? Math.round(metrics.total / metrics.ventas) : 0;
+    const chartData = {
+      daily: dailyResult.rows.map((item) => ({
+        label: formatDate(item.fecha),
+        ventas: Number(item.ventas || 0),
+        total: Number(item.total || 0)
+      })),
+      payments: paymentsResult.rows.map((item) => ({
+        label: item.nombre,
+        value: Number(item.total || 0),
+        cantidad: Number(item.cantidad || 0),
+        color: item.color || '#0f766e'
+      })),
+      products: productsResult.rows.map((item) => ({
+        label: `${item.codigo} - ${item.nombre}`,
+        value: Number(item.cantidad || 0),
+        total: Number(item.total || 0)
+      })),
+      clients: clientsResult.rows.map((item) => ({
+        label: item.nombre || 'Cliente',
+        value: Number(item.total || 0),
+        cantidad: Number(item.cantidad || 0)
+      }))
+    };
+    res.render("analisis_ventas", {
+      title: "Analisis de ventas",
+      fechaInicio,
+      fechaFin,
+      metrics,
+      daily: dailyResult.rows,
+      payments: paymentsResult.rows,
+      products: productsResult.rows,
+      clients: clientsResult.rows,
+      chartData
+    });
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -3654,6 +3925,86 @@ app.post("/gastos/:id/anular", requireAuth, requireEvent("gasto-ocultar"), async
   }
 });
 
+app.get("/ventas", requireAuth, requireEvent("venta-ocultar"), async (req, res, next) => {
+  try {
+    const condiciones = (Array.isArray(req.query.condicion) ? req.query.condicion : [req.query.condicion])
+      .map((condition) => String(condition || "").trim().toUpperCase())
+      .filter(Boolean);
+    const filters = {
+      desde: String(req.query.desde || "").trim(),
+      hasta: String(req.query.hasta || "").trim(),
+      cliente: String(req.query.cliente || "").trim(),
+      condiciones: [...new Set(condiciones)].filter((condition) => ["CONTADO", "CREDITO"].includes(condition))
+    };
+    const result = await listarVentas({ ...filters, pagina: req.query.pagina });
+    res.render("ventas/index", {
+      title: "Ventas",
+      ventas: result.rows,
+      pagination: { total: result.total, page: result.page, pageSize: result.pageSize },
+      filters
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/ventas/nueva", requireAuth, requireEvent("venta-ocultar"), async (req, res, next) => {
+  try {
+    const options = await getVentaOptions();
+    res.render("ventas/form", { title: "Nueva venta", ...options });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/ventas", requireAuth, requireEvent("venta-ocultar"), async (req, res) => {
+  try {
+    const sale = await crearVenta({
+      clienteId: req.body.fk_idcliente,
+      formaPagoId: req.body.fk_idforma_pago,
+      condicion: String(req.body.condicion || "").trim().toUpperCase(),
+      productIds: req.body.producto_id,
+      quantities: req.body.cantidad,
+      creadoPor: currentUser(req)
+    });
+    setFlash(req, "success", `Venta ${sale.numero} creada correctamente.`);
+    res.redirect(`/ventas/${sale.idventa}`);
+  } catch (error) {
+    setFlash(req, "error", userErrorMessage(error));
+    res.redirect("/ventas/nueva");
+  }
+});
+
+app.get("/ventas/:id", requireAuth, requireEvent("venta-ocultar"), async (req, res, next) => {
+  try {
+    const venta = await obtenerVenta(Number(req.params.id));
+    if (!venta) return res.status(404).render("error", { title: "Venta no encontrada", message: "La venta solicitada no existe." });
+    res.render("ventas/detail", { title: `Venta ${venta.numero}`, venta });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/ventas/:id/anular", requireAuth, requireEvent("venta-ocultar"), async (req, res) => {
+  try {
+    await anularVenta(Number(req.params.id), currentUser(req));
+    setFlash(req, "success", "La venta fue anulada y el stock fue repuesto.");
+  } catch (error) {
+    setFlash(req, "error", userErrorMessage(error));
+  }
+  res.redirect(`/ventas/${req.params.id}`);
+});
+
+app.post("/ventas/:id/marcar-pagada", requireAuth, requireEvent("venta-ocultar"), async (req, res) => {
+  try {
+    await marcarVentaPagada(Number(req.params.id), currentUser(req));
+    setFlash(req, "success", "La venta fue marcada como pagada.");
+  } catch (error) {
+    setFlash(req, "error", userErrorMessage(error));
+  }
+  res.redirect(`/ventas/${req.params.id}`);
+});
+
 app.get("/usuarios", requireAuth, requireEvent("usuario-ocultar"), async (req, res, next) => {
   try {
     const editId = req.query.edit;
@@ -3968,6 +4319,10 @@ async function getCrudOptions(fields) {
     }
     if (field.optionsTable === "servicio_grupo") {
       const result = await query(`select id, nombre from servicio_grupo where activo = true order by nombre`);
+      return [field.name, result.rows];
+    }
+    if (field.optionsTable === "producto_categoria") {
+      const result = await query(`select id, nombre from producto_categoria where activo = true order by nombre`);
       return [field.name, result.rows];
     }
     return [field.name, []];
@@ -4330,6 +4685,10 @@ function crudRoutes(pathName, table, fields, title, authorization = {}) {
 function fieldValue(value, field) {
   if (field.type === "checkbox") return value === "on";
   if (field.type === "money") return toMoney(value);
+  if (field.type === "integer") {
+    const text = String(value ?? "").trim();
+    return text === "" ? null : Number.parseInt(text, 10);
+  }
   if (field.type === "select") return value ? Number(value) : null;
   if (field.uppercase) return value ? value.trim().toUpperCase() : value;
   return value === "" ? null : value;
@@ -4389,6 +4748,24 @@ crudRoutes("formas-pago", "formas_pago", [
   { name: "mostrar_despues_crear", label: "Mostrar despues de crear", type: "checkbox" },
   { name: "activo", label: "Activo", type: "checkbox" }
 ], "Formas de pago", { accessEvent: "pagos-ocultar" });
+
+crudRoutes("producto-categorias", "producto_categoria", [
+  { name: "nombre", label: "Nombre", required: true, uppercase: true },
+  { name: "descripcion", label: "Descripcion", uppercase: true },
+  { name: "activo", label: "Activo", type: "checkbox" }
+], "Categorias de productos", { accessEvent: "producto_categoria-ocultar" });
+
+crudRoutes("productos", "producto", [
+  { name: "fk_idproducto_categoria", label: "Categoria", type: "select", optionsTable: "producto_categoria", required: true, allowEmpty: false },
+  { name: "codigo", label: "Codigo", required: true, uppercase: true },
+  { name: "nombre", label: "Nombre", required: true, uppercase: true },
+  { name: "descripcion", label: "Descripcion", uppercase: true },
+  { name: "precio_compra", label: "Precio compra", type: "money", required: true },
+  { name: "precio_venta", label: "Precio venta", type: "money", required: true },
+  { name: "stock_actual", label: "Stock actual", type: "integer", required: true },
+  { name: "stock_minimo", label: "Stock minimo", type: "integer", required: true },
+  { name: "activo", label: "Activo", type: "checkbox" }
+], "Productos", { accessEvent: "producto-ocultar" });
 
 app.use((req, res) => {
   res.status(404).render("error", { title: "No encontrado", message: "Pagina no encontrada." });

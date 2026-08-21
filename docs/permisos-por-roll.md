@@ -52,6 +52,9 @@ Los eventos de ocultación disponibles actualmente son:
 - `factura-ocultar`: Facturas y operaciones sobre facturas existentes.
 - `factura_libre-ocultar`: Nueva factura libre.
 - `config_facturasend-ocultar`: Configuración electrónica de FacturaSend.
+- `producto_categoria-ocultar`: Categorías de productos.
+- `producto-ocultar`: Productos.
+- `venta-ocultar`: Registro y consulta de ventas.
 
 En el menú Cliente, los permisos individuales son:
 
@@ -91,6 +94,8 @@ El menú Factura contiene tres opciones independientes:
 - `config_facturasend-ocultar`: muestra `Configuracion electronica` y protege `/facturasend/config`, la importación y la prueba de conexión.
 
 El menú Factura desaparece cuando sus tres permisos están deshabilitados. La ruta compartida `POST /facturas` selecciona el permiso según la solicitud: si contiene `fk_idlavado`, usa `factura-ocultar`; de lo contrario, usa `factura_libre-ocultar`.
+
+El menú Producto se muestra si al menos uno de sus permisos está activo y contiene `Categoria` y `Producto` según `producto_categoria-ocultar` y `producto-ocultar`. La pantalla `Venta` usa `venta-ocultar` para proteger el listado, alta, detalle, anulación y cobro de ventas.
 
 Ejemplo de ruta:
 

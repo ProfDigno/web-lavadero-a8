@@ -37,6 +37,10 @@
     <% const showFactura = canEvent('factura-ocultar'); %>
     <% const showFacturaLibre = canEvent('factura_libre-ocultar'); %>
     <% const showFacturaSend = canEvent('config_facturasend-ocultar'); %>
+    <% const showProductoCategoria = canEvent('producto_categoria-ocultar'); %>
+    <% const showProducto = canEvent('producto-ocultar'); %>
+    <% const showVenta = canEvent('venta-ocultar'); %>
+    <% const showAnalisisVenta = canEvent('AnalisisVenta-ocultar'); %>
     <nav class="nav" id="main-navigation" aria-label="Navegación principal">
       <a href="/"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-7h6v7"/></svg></span>Inicio</a>
       <details class="nav-menu">
@@ -76,6 +80,24 @@
           <div class="nav-submenu">
             <a href="/servicios">Servicios</a>
             <a href="/servicio-grupos">Grupos de servicios</a>
+          </div>
+        </details>
+      <% } %>
+      <% if (showProductoCategoria || showProducto) { %>
+        <details class="nav-menu">
+          <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4z"/><path d="M7 7V4h10v3M8 11h8M8 15h5"/></svg></span>Producto</summary>
+          <div class="nav-submenu">
+            <% if (showProductoCategoria) { %><a href="/producto-categorias">Categoria</a><% } %>
+            <% if (showProducto) { %><a href="/productos">Producto</a><% } %>
+          </div>
+        </details>
+      <% } %>
+      <% if (showVenta || showAnalisisVenta) { %>
+        <details class="nav-menu">
+          <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg></span>Venta</summary>
+          <div class="nav-submenu">
+            <% if (showVenta) { %><a href="/ventas">Venta</a><% } %>
+            <% if (showAnalisisVenta) { %><a href="/analisis-ventas">Analisis venta</a><% } %>
           </div>
         </details>
       <% } %>
