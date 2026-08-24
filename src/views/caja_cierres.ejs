@@ -24,6 +24,13 @@
   </div>
 </div>
 
+<% if (cajaBloqueadaPorFecha && cajaSesionAtrasada) { %>
+  <section class="panel caja-cierre-notice error" role="alert">
+    <h2>Cierre diario pendiente</h2>
+    <p>La caja fue abierta el <strong><%= formatDateTime(cajaSesionAtrasada.abierta_en) %></strong>. Debe cerrarla antes de continuar y abrir una nueva sesión para hoy.</p>
+  </section>
+<% } %>
+
 <% if (schemaMissing) { %>
   <section class="panel caja-cierre-notice error">
     <h2>Migración pendiente</h2>

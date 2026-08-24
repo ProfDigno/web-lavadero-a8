@@ -140,9 +140,46 @@ app.use(async (req, res, next) => {
   }
 });
 
+app.use(async (req, res, next) => {
+  req.cajaBloqueadaPorFecha = false;
+  req.cajaSesionAbierta = null;
+  req.cajaMenuRestringido = false;
+  req.cajaSesionAtrasada = null;
+  if (!req.session.user) return next();
+
+  try {
+    const result = await query(
+      `select idcaja_sesion, abierta_en,
+              abierta_en::date < current_date as es_atrasada
+       from caja_sesiones
+       where estado = 'ABIERTA'
+       order by abierta_en desc
+       limit 1`
+    );
+    req.cajaSesionAbierta = result.rows[0] || null;
+    req.cajaSesionAtrasada = req.cajaSesionAbierta?.es_atrasada ? req.cajaSesionAbierta : null;
+    req.cajaBloqueadaPorFecha = Boolean(req.cajaSesionAtrasada);
+    req.cajaMenuRestringido = !req.cajaSesionAbierta || req.cajaBloqueadaPorFecha;
+
+    const isClosurePath = req.path === "/caja-cierres" || req.path.startsWith("/caja-cierres/");
+    const isLogoutPath = req.path === "/logout";
+    if (req.cajaMenuRestringido && !isClosurePath && !isLogoutPath) {
+      return res.redirect("/caja-cierres");
+    }
+    next();
+  } catch (error) {
+    if (cajaCierresSchemaMissing(error)) return next();
+    next(error);
+  }
+});
+
 app.use((req, res, next) => {
   res.locals.user = req.session.user || null;
   res.locals.userRoll = req.authorization?.roll || null;
+  res.locals.cajaBloqueadaPorFecha = Boolean(req.cajaBloqueadaPorFecha);
+  res.locals.cajaMenuRestringido = Boolean(req.cajaMenuRestringido);
+  res.locals.cajaSesionAbierta = req.cajaSesionAbierta || null;
+  res.locals.cajaSesionAtrasada = req.cajaSesionAtrasada || null;
   res.locals.canItem = (codigo) => permissionAllowed(req.authorization?.items, codigo);
   res.locals.canEvent = (codigo) => permissionAllowed(req.authorization?.eventos, codigo);
   res.locals.appVersion = config.version;
@@ -224,6 +261,21 @@ function requireItem(code, blockedMessage) {
 
 function requireEvent(code) {
   return requirePermission("eventos", code);
+}
+
+function requireCajaCierreAccess(req, res, next) {
+  if (req.cajaBloqueadaPorFecha) return next();
+  return requireEvent("cierre_caja-ocultar")(req, res, next);
+}
+
+function requireCajaAperturaAccess(req, res, next) {
+  if (req.cajaBloqueadaPorFecha) {
+    return res.status(409).render("error", {
+      title: "Cierre de caja pendiente",
+      message: "Debe cerrar la sesión de caja abierta de una fecha anterior antes de abrir una nueva caja."
+    });
+  }
+  return requireEvent("cierre_caja-ocultar")(req, res, next);
 }
 
 function requireAnyEvent(...codes) {
@@ -1705,7 +1757,7 @@ app.get("/caja", requireAuth, requireEvent("caja-ocultar"), async (req, res, nex
   }
 });
 
-app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res, next) => {
+app.get("/caja-cierres", requireAuth, requireCajaCierreAccess, async (req, res, next) => {
   try {
     const sesion = await getCajaSesionAbierta();
     if (sesion) await sincronizarCajaSesionAbierta();
@@ -1742,6 +1794,7 @@ app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async
       historial,
       detalle: null,
       creditosPendientes,
+      cajaBloqueadaPorFecha: Boolean(req.cajaBloqueadaPorFecha),
       schemaMissing: false
     });
   } catch (error) {
@@ -1754,6 +1807,7 @@ app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async
         historial: [],
         detalle: null,
         creditosPendientes: [],
+        cajaBloqueadaPorFecha: Boolean(req.cajaBloqueadaPorFecha),
         schemaMissing: true
       });
     }
@@ -1761,7 +1815,7 @@ app.get("/caja-cierres", requireAuth, requireEvent("cierre_caja-ocultar"), async
   }
 });
 
-app.post("/caja-cierres/abrir", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res) => {
+app.post("/caja-cierres/abrir", requireAuth, requireCajaAperturaAccess, async (req, res) => {
   try {
     const saldoInicialEfectivo = toMoney(req.body.saldo_inicial_efectivo);
     if (saldoInicialEfectivo < 0) throw new Error("El saldo inicial no puede ser negativo.");
@@ -1797,10 +1851,10 @@ async function sendCajaTicketPdf(req, res, next, resumido) {
   }
 }
 
-app.get("/caja-cierres/:id/pdf/completo", requireAuth, requireEvent("cierre_caja-ocultar"), (req, res, next) => sendCajaTicketPdf(req, res, next, false));
-app.get("/caja-cierres/:id/pdf/resumido", requireAuth, requireEvent("cierre_caja-ocultar"), (req, res, next) => sendCajaTicketPdf(req, res, next, true));
+app.get("/caja-cierres/:id/pdf/completo", requireAuth, requireCajaCierreAccess, (req, res, next) => sendCajaTicketPdf(req, res, next, false));
+app.get("/caja-cierres/:id/pdf/resumido", requireAuth, requireCajaCierreAccess, (req, res, next) => sendCajaTicketPdf(req, res, next, true));
 
-app.get("/caja-cierres/:id", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res, next) => {
+app.get("/caja-cierres/:id", requireAuth, requireCajaCierreAccess, async (req, res, next) => {
   try {
     const detalle = await getCajaSesion(Number(req.params.id));
     if (!detalle) return res.status(404).render("error", { title: "Cierre no encontrado", message: "La sesión de caja solicitada no existe." });
@@ -1812,6 +1866,7 @@ app.get("/caja-cierres/:id", requireAuth, requireEvent("cierre_caja-ocultar"), a
       historial: [],
       detalle,
       creditosPendientes: detalle.creditos_pendientes,
+      cajaBloqueadaPorFecha: Boolean(req.cajaBloqueadaPorFecha),
       schemaMissing: false
     });
   } catch (error) {
@@ -1822,7 +1877,7 @@ app.get("/caja-cierres/:id", requireAuth, requireEvent("cierre_caja-ocultar"), a
   }
 });
 
-app.post("/caja-cierres/:id/saldo-inicial", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res) => {
+app.post("/caja-cierres/:id/saldo-inicial", requireAuth, requireCajaCierreAccess, async (req, res) => {
   const id = Number(req.params.id);
   try {
     const rawSaldo = String(req.body.saldo_inicial_efectivo ?? "").trim().replace(",", ".");
@@ -1837,7 +1892,7 @@ app.post("/caja-cierres/:id/saldo-inicial", requireAuth, requireEvent("cierre_ca
   res.redirect(`/caja-cierres/${id}`);
 });
 
-app.post("/caja-cierres/:id/cerrar", requireAuth, requireEvent("cierre_caja-ocultar"), async (req, res) => {
+app.post("/caja-cierres/:id/cerrar", requireAuth, requireCajaCierreAccess, async (req, res) => {
   const id = Number(req.params.id);
   try {
     const denominaciones = parseCajaDenominaciones(req.body);

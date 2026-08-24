@@ -43,6 +43,11 @@
     <% const showProducto = canEvent('producto-ocultar'); %>
     <% const showVenta = canEvent('venta-ocultar'); %>
     <% const showAnalisisVenta = canEvent('AnalisisVenta-ocultar'); %>
+    <% if (cajaMenuRestringido) { %>
+    <nav class="nav" id="main-navigation" aria-label="Navegación principal">
+      <a href="/caja-cierres"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5M8 17h3"/></svg></span>Cierre de caja</a>
+    </nav>
+    <% } else { %>
     <nav class="nav" id="main-navigation" aria-label="Navegación principal">
       <a href="/"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-7h6v7"/></svg></span>Inicio</a>
       <details class="nav-menu">
@@ -168,6 +173,7 @@
       </details>
       <% } %>
     </nav>
+    <% } %>
   <% } %>
   <main class="container <%= user ? '' : 'auth-container' %>">
     <% if (flash) { %>
