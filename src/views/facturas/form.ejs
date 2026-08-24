@@ -5,7 +5,7 @@
     <p><%= factura.origen === 'LAVADO' ? 'Datos precargados desde lavado' : 'Factura libre para preimpreso' %></p>
   </div>
   <div class="actions">
-    <a class="button secondary" href="/facturas">Volver</a>
+    <a class="button secondary" href="/facturas?<%= filterQuery %>">Volver</a>
     <% if (factura.id) { %>
       <a class="button" href="/facturas/<%= factura.id %>/pdf" target="_blank">PDF</a>
       <% if (factura.electronica_cdc) { %>
@@ -19,6 +19,9 @@
   <input type="hidden" name="origen" value="<%= factura.origen || 'LIBRE' %>">
   <input type="hidden" name="fk_idlavado" value="<%= factura.fk_idlavado || '' %>">
   <input type="hidden" name="fk_idcliente" value="<%= factura.fk_idcliente || '' %>" data-invoice-client-id>
+  <input type="hidden" name="redirect_fecha_inicio" value="<%= fechaInicio %>">
+  <input type="hidden" name="redirect_fecha_fin" value="<%= fechaFin %>">
+  <input type="hidden" name="redirect_cliente" value="<%= clienteFiltro %>">
 
   <% if (factura.id) { %>
     <section class="panel stack electronic-panel invoice-electronic-panel">
@@ -183,7 +186,15 @@
   </template>
 </form>
 <% if (factura.id) { %>
-  <form id="emit-electronic-form" method="post" action="/facturas/<%= factura.id %>/electronica/emitir"></form>
-  <form id="refresh-electronic-form" method="post" action="/facturas/<%= factura.id %>/electronica/estado"></form>
+  <form id="emit-electronic-form" method="post" action="/facturas/<%= factura.id %>/electronica/emitir">
+    <input type="hidden" name="redirect_fecha_inicio" value="<%= fechaInicio %>">
+    <input type="hidden" name="redirect_fecha_fin" value="<%= fechaFin %>">
+    <input type="hidden" name="redirect_cliente" value="<%= clienteFiltro %>">
+  </form>
+  <form id="refresh-electronic-form" method="post" action="/facturas/<%= factura.id %>/electronica/estado">
+    <input type="hidden" name="redirect_fecha_inicio" value="<%= fechaInicio %>">
+    <input type="hidden" name="redirect_fecha_fin" value="<%= fechaFin %>">
+    <input type="hidden" name="redirect_cliente" value="<%= clienteFiltro %>">
+  </form>
 <% } %>
 <%- include('../partials/footer') %>

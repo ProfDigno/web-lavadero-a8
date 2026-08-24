@@ -6,17 +6,25 @@
       </div>
   <div class="actions">
     <a class="button secondary" href="/facturasend/config">Configuracion electronica</a>
-    <a class="button" href="/facturas/nueva">Nueva factura libre</a>
+    <a class="button" href="/facturas/nueva?<%= filterQuery %>">Nueva factura libre</a>
   </div>
 </div>
 
 <form class="toolbar" method="get" action="/facturas">
   <label>
-    Fecha
-    <input type="date" name="fecha" value="<%= fecha %>">
+    Fecha desde
+    <input type="date" name="fecha_inicio" value="<%= fechaInicio %>">
+  </label>
+  <label>
+    Fecha hasta
+    <input type="date" name="fecha_fin" value="<%= fechaFin %>">
+  </label>
+  <label>
+    Cliente
+    <input type="search" name="cliente" value="<%= clienteFiltro %>" placeholder="RUC o nombre">
   </label>
   <button type="submit">Ver</button>
-  <% if (fecha) { %><a class="button secondary" href="/facturas">Todas</a><% } %>
+  <a class="button secondary" href="/facturas">Limpiar</a>
 </form>
 
 <section class="grid one">
@@ -52,7 +60,7 @@
             </td>
             <td class="money-cell"><%= formatMoney(factura.total) %></td>
             <td class="cell-actions">
-              <a class="icon-button" href="/facturas/<%= factura.id %>/editar" aria-label="Editar" title="Editar">
+              <a class="icon-button" href="/facturas/<%= factura.id %>/editar?<%= filterQuery %>" aria-label="Editar" title="Editar">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M4 20h4l10.5-10.5-4-4L4 16v4z"></path>
                   <path d="M13.5 6.5l4 4"></path>
@@ -68,13 +76,16 @@
               </a>
               <% if (hasFacturaSendConfig && !factura.electronica_cdc) { %>
                 <form method="post" action="/facturas/<%= factura.id %>/electronica/emitir">
+                  <input type="hidden" name="redirect_fecha_inicio" value="<%= fechaInicio %>">
+                  <input type="hidden" name="redirect_fecha_fin" value="<%= fechaFin %>">
+                  <input type="hidden" name="redirect_cliente" value="<%= clienteFiltro %>">
                   <button class="icon-button electronic-button" type="submit" aria-label="Emitir electronica" title="Emitir electronica">FE</button>
                 </form>
               <% } %>
             </td>
           </tr>
         <% }) %>
-        <% if (!facturas.length) { %><tr><td colspan="9">Sin facturas.</td></tr><% } %>
+        <% if (!facturas.length) { %><tr><td colspan="9">Sin facturas con los filtros seleccionados.</td></tr><% } %>
       </tbody>
     </table>
   </div>

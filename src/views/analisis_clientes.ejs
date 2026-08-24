@@ -1,0 +1,167 @@
+<%- include('partials/header') %>
+<%
+  const hayDatos = clientes.length > 0;
+  const resultFrom = totalClientes ? ((page - 1) * pageSize) + 1 : 0;
+  const resultTo = Math.min(totalClientes, page * pageSize);
+  const clientePageUrl = (targetPage) => {
+    const params = new URLSearchParams();
+    if (fechaInicio) params.set('fecha_inicio', fechaInicio);
+    if (fechaFin) params.set('fecha_fin', fechaFin);
+    if (searchTerm) params.set('q', searchTerm);
+    params.set('pagina', String(targetPage));
+    if (clienteSeleccionadoId) {
+      params.set('cliente_id', String(clienteSeleccionadoId));
+      params.set('lavados_pagina', String(detallePagina));
+    }
+    return `/analisis-clientes?${params.toString()}`;
+  };
+  const clienteDetailUrl = (clienteId) => {
+    const params = new URLSearchParams();
+    if (fechaInicio) params.set('fecha_inicio', fechaInicio);
+    if (fechaFin) params.set('fecha_fin', fechaFin);
+    if (searchTerm) params.set('q', searchTerm);
+    params.set('pagina', String(page));
+    params.set('cliente_id', String(clienteId));
+    return `/analisis-clientes?${params.toString()}`;
+  };
+  const detallePageUrl = (targetPage) => {
+    const params = new URLSearchParams();
+    if (fechaInicio) params.set('fecha_inicio', fechaInicio);
+    if (fechaFin) params.set('fecha_fin', fechaFin);
+    if (searchTerm) params.set('q', searchTerm);
+    params.set('pagina', String(page));
+    params.set('cliente_id', String(clienteSeleccionadoId));
+    params.set('lavados_pagina', String(targetPage));
+    return `/analisis-clientes?${params.toString()}`;
+  };
+  const detalleFrom = totalLavadosRelacionados ? ((detallePagina - 1) * pageSize) + 1 : 0;
+  const detalleTo = Math.min(totalLavadosRelacionados, detallePagina * pageSize);
+%>
+<div class="page-head">
+  <div>
+    <h1>Análisis de cliente</h1>
+    <p>Cantidad de lavados por cliente dentro del rango seleccionado</p>
+  </div>
+</div>
+
+<form class="toolbar analysis-filter" method="get" action="/analisis-clientes">
+  <label>
+    Fecha desde
+    <input type="date" name="fecha_inicio" value="<%= fechaInicio %>">
+  </label>
+  <label>
+    Fecha hasta
+    <input type="date" name="fecha_fin" value="<%= fechaFin %>">
+  </label>
+  <label>
+    Buscar cliente
+    <input type="search" name="q" value="<%= searchTerm %>" placeholder="Chapa, nombre, modelo, RUC o teléfono">
+  </label>
+  <button type="submit">Ver</button>
+  <a class="button secondary" href="/analisis-clientes">Limpiar</a>
+</form>
+
+<section class="metrics analysis-general-metrics">
+  <article><span>Clientes con lavados</span><strong><%= totalClientes %></strong></article>
+  <article><span>Total de lavados</span><strong><%= totalLavados %></strong></article>
+</section>
+
+<% if (!hayDatos) { %>
+  <section class="analysis-alerts">
+    <div class="flash">No hay lavados para el rango seleccionado.</div>
+  </section>
+<% } %>
+
+<section>
+  <div class="section-title compact-title">
+    <div>
+      <h2>Ranking de clientes</h2>
+      <p><%= formatDate(fechaInicio) %> - <%= formatDate(fechaFin) %></p>
+    </div>
+    <span class="crud-search-count">Mostrando <%= resultFrom %>-<%= resultTo %> de <%= totalClientes %> clientes</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Posición</th><th>Cliente</th><th>Grupo cliente</th><th class="money-cell">Cantidad de lavados</th><th class="money-cell">Monto total lavado</th></tr>
+      </thead>
+      <tbody>
+        <% clientes.forEach((cliente, index) => { %>
+          <tr class="selectable-row <%= clienteSeleccionadoId === Number(cliente.idcliente) ? 'is-selected' : '' %>" data-analysis-client-row data-client-url="<%= clienteDetailUrl(cliente.idcliente) %>">
+            <td><strong><%= ((page - 1) * pageSize) + index + 1 %></strong></td>
+            <td><strong><%= cliente.cliente_label %></strong><% if (cliente.nombre) { %><br><small><%= cliente.nombre %></small><% } %></td>
+            <td><%= cliente.grupo_cliente_nombre %></td>
+            <td class="money-cell"><strong><%= cliente.cantidad_lavados %></strong></td>
+            <td class="money-cell"><strong><%= formatMoney(cliente.monto_total_lavado) %></strong></td>
+          </tr>
+        <% }) %>
+        <% if (!hayDatos) { %><tr><td colspan="5">Sin clientes con lavados en el rango.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <div class="pagination-bar analysis-pagination">
+    <span>Página <%= page %> de <%= pageCount %></span>
+    <% if (page > 1) { %>
+      <a class="button secondary" href="<%= clientePageUrl(page - 1) %>">Anterior</a>
+    <% } else { %>
+      <span class="button secondary is-disabled">Anterior</span>
+    <% } %>
+    <% if (page < pageCount) { %>
+      <a class="button secondary" href="<%= clientePageUrl(page + 1) %>">Siguiente</a>
+    <% } else { %>
+      <span class="button secondary is-disabled">Siguiente</span>
+    <% } %>
+  </div>
+</section>
+
+<% if (!clienteSeleccionado) { %>
+  <div class="related-clients-panel" data-analysis-client-empty>
+    Seleccione un cliente para ver sus lavados relacionados.
+  </div>
+<% } else { %>
+  <section class="related-clients-panel" data-analysis-client-detail>
+    <div class="section-title compact-title">
+      <div>
+        <h2>Lavados de <%= clienteSeleccionado.chapa || clienteSeleccionado.nombre || 'Cliente' %></h2>
+        <p><%= clienteSeleccionado.marca_modelo || '' %> · <%= formatDate(fechaInicio) %> - <%= formatDate(fechaFin) %></p>
+      </div>
+      <span class="crud-search-count">Mostrando <%= detalleFrom %>-<%= detalleTo %> de <%= totalLavadosRelacionados %> lavados</span>
+    </div>
+    <div class="table-wrap related-table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Fecha</th><th>Vehículo</th><th>Condición</th><th>Forma de pago</th><th>Estado</th><th class="money-cell">Monto</th></tr>
+        </thead>
+        <tbody>
+          <% lavadosRelacionados.forEach((lavado) => { %>
+            <tr class="estado-<%= lavado.estado.toLowerCase() %>">
+              <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
+              <td><%= formatDateTime(lavado.fecha_creado) %></td>
+              <td><strong><%= formatLavadoVehicle(lavado) %></strong><br><small><%= lavado.marca_modelo || '' %></small></td>
+              <td><%= lavado.condicion || '' %></td>
+              <td><%- include('partials/payment_chip', { nombre: lavado.forma_pago, icono: lavado.forma_pago_icono, color: lavado.forma_pago_color }) %></td>
+              <td><span class="badge <%= lavado.estado.toLowerCase() %>"><%= lavado.estado %></span></td>
+              <td class="money-cell"><%= formatMoney(lavado.total) %></td>
+            </tr>
+          <% }) %>
+          <% if (!lavadosRelacionados.length) { %><tr><td colspan="7">Sin lavados para este cliente en el rango seleccionado.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-bar analysis-pagination">
+      <span>Página <%= detallePagina %> de <%= detallePaginaCount %></span>
+      <% if (detallePagina > 1) { %>
+        <a class="button secondary" href="<%= detallePageUrl(detallePagina - 1) %>">Anterior</a>
+      <% } else { %>
+        <span class="button secondary is-disabled">Anterior</span>
+      <% } %>
+      <% if (detallePagina < detallePaginaCount) { %>
+        <a class="button secondary" href="<%= detallePageUrl(detallePagina + 1) %>">Siguiente</a>
+      <% } else { %>
+        <span class="button secondary is-disabled">Siguiente</span>
+      <% } %>
+    </div>
+  </section>
+<% } %>
+
+<%- include('partials/footer') %>

@@ -21,6 +21,7 @@
     </button>
     <% const showAnalisisLavado = canEvent('AnalisisLavado-ocultar'); %>
     <% const showCliente = canEvent('cliente-ocultar'); %>
+    <% const showAnalisisCliente = canEvent('AnalisisCliente-ocultar'); %>
     <% const showGrupoCliente = canEvent('grupo_cliente-ocultar'); %>
     <% const showCreditoGrupo = canEvent('credito_grupo-ocultar'); %>
     <% const showServicio = canItem('servicio') && canEvent('servicio-ocultar'); %>
@@ -30,6 +31,7 @@
     <% const showComisiones = canEvent('comisiones-ocultar'); %>
     <% const showGasto = canEvent('gasto-ocultar'); %>
     <% const showGastoTipo = canEvent('gasto_tipo-ocultar'); %>
+    <% const showAnalisisGasto = canEvent('AnalisisGasto-ocultar'); %>
     <% const showPagos = canEvent('pagos-ocultar'); %>
     <% const showUsuario = canEvent('usuario-ocultar'); %>
     <% const showUsuarioRoll = canEvent('usuario_roll-ocultar'); %>
@@ -58,12 +60,15 @@
       <% if (canEvent('cierre_caja-ocultar')) { %>
         <a href="/caja-cierres"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5M8 17h3"/></svg></span>Cierre de caja</a>
       <% } %>
-      <% if (showCliente || showGrupoCliente || showCreditoGrupo) { %>
+      <% if (showCliente || showAnalisisCliente || showGrupoCliente || showCreditoGrupo) { %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0m3-9a3 3 0 1 0 0-6m0 8a5 5 0 0 1 3 4"/></svg></span>Cliente</summary>
         <div class="nav-submenu">
           <% if (showCliente) { %>
             <a href="/clientes">Cliente</a>
+          <% } %>
+          <% if (showAnalisisCliente) { %>
+            <a href="/analisis-clientes">Análisis de cliente</a>
           <% } %>
           <% if (showGrupoCliente) { %>
             <a href="/grupo-clientes">Grupo de cliente</a>
@@ -120,7 +125,7 @@
         </div>
       </details>
       <% } %>
-      <% if (showGasto || showGastoTipo) { %>
+      <% if (showGasto || showGastoTipo || showAnalisisGasto) { %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM7 7V5h10v2M8 11h8M8 15h5"/></svg></span>Gasto</summary>
         <div class="nav-submenu">
@@ -129,6 +134,9 @@
           <% } %>
           <% if (showGasto) { %>
             <a href="/gastos">Gasto</a>
+          <% } %>
+          <% if (showAnalisisGasto) { %>
+            <a href="/analisis-gastos">Análisis de gastos</a>
           <% } %>
         </div>
       </details>

@@ -153,10 +153,10 @@
             return item[field.name] == null ? '' : item[field.name];
           })).join(' '); %>
           <tr
-            class="<%= modalCrud && !item.activo ? 'row-inactive' : '' %> <%= ['grupo-clientes', 'servicio-grupos', 'personal', 'clientes'].includes(pathName) ? 'selectable-row' : '' %>"
+            class="<%= modalCrud && !item.activo ? 'row-inactive' : '' %> <%= ['grupo-clientes', 'servicio-grupos', 'personal', 'clientes', 'producto-categorias'].includes(pathName) ? 'selectable-row' : '' %>"
             data-crud-row
             data-search="<%= itemSearchText %>"
-            <%- ['grupo-clientes', 'servicio-grupos', 'personal', 'clientes'].includes(pathName) ? `data-related-group-row="${item.id}"` : '' %>>
+            <%- ['grupo-clientes', 'servicio-grupos', 'personal', 'clientes', 'producto-categorias'].includes(pathName) ? `data-related-group-row="${item.id}"` : '' %>>
             <td><%= item.id %></td>
             <% tableFields.forEach((field) => { %>
               <td class="<%= field.type === 'money' ? 'money-cell' : '' %>">
@@ -377,6 +377,55 @@
               <% }) %>
               <% if (!relatedServices.length) { %>
                 <tr><td colspan="4">Sin servicios relacionados.</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    <% }) %>
+  <% } %>
+  <% if (pathName === 'producto-categorias') { %>
+    <div class="related-clients-panel is-hidden" data-related-empty>
+      Seleccione una categoria para ver sus productos relacionados.
+    </div>
+    <% items.forEach((category) => { %>
+      <% const relatedProducts = (relatedProductsByCategory && relatedProductsByCategory[String(category.id)]) || []; %>
+      <section class="related-clients-panel is-hidden" data-related-panel="<%= category.id %>">
+        <div class="section-title compact-title">
+          <div>
+            <h2>Productos de <%= category.nombre %></h2>
+            <p><%= relatedProducts.length %> <%= relatedProducts.length === 1 ? 'producto relacionado' : 'productos relacionados' %></p>
+          </div>
+        </div>
+        <div class="table-wrap related-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Codigo</th>
+                <th>Nombre</th>
+                <th>Descripcion</th>
+                <th class="money-cell">Precio venta</th>
+                <th class="money-cell">Stock</th>
+                <th class="money-cell">Stock minimo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% relatedProducts.forEach((product) => { %>
+                <tr class="<%= product.activo ? '' : 'row-inactive' %>">
+                  <td><%= product.id %></td>
+                  <td><%= product.codigo || '' %></td>
+                  <td><strong><%= product.nombre || '' %></strong></td>
+                  <td><%= product.descripcion || '' %></td>
+                  <td class="money-cell"><%= formatMoney(product.precio_venta) %></td>
+                  <td class="money-cell"><%= product.stock_actual %></td>
+                  <td class="money-cell"><%= product.stock_minimo %></td>
+                  <td><%= product.activo ? 'Activo' : 'Inactivo' %></td>
+                </tr>
+              <% }) %>
+              <% if (!relatedProducts.length) { %>
+                <tr><td colspan="8">Sin productos relacionados.</td></tr>
               <% } %>
             </tbody>
           </table>

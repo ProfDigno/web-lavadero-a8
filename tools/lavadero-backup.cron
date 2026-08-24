@@ -1,0 +1,5 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Backup diario de PostgreSQL a las 23:00, hora del servidor.
+0 23 * * * root /usr/local/sbin/lavadero-backup.sh

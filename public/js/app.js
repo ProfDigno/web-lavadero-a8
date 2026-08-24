@@ -453,6 +453,12 @@
   const relatedPanels = Array.from(document.querySelectorAll("[data-related-panel]"));
   const relatedEmpty = document.querySelector("[data-related-empty]");
   const tabButtons = Array.from(document.querySelectorAll("[data-tab-button]"));
+  document.querySelectorAll("[data-analysis-client-row]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("a, button, form, input, label")) return;
+      window.location.href = row.dataset.clientUrl;
+    });
+  });
   function showTab(tabId) {
     const panelScope = document.querySelector(`[data-tab-panel="${tabId}"]`)?.closest("[data-related-panel]");
     if (!panelScope) return;
