@@ -12,6 +12,10 @@
     Fecha
     <input type="date" name="fecha" value="<%= fecha %>">
   </label>
+  <label>
+    Buscar vehículo
+    <input type="search" name="q" value="<%= searchTerm %>" placeholder="Chapa o marca/modelo" data-dashboard-wash-search autocomplete="off">
+  </label>
   <button type="submit">Ver</button>
   <% if (canEvent('caja-ocultar')) { %>
     <a class="button secondary" href="/caja?fecha=<%= fecha %>">Ver caja</a>
@@ -59,9 +63,9 @@
   </div>
   <div>
     <h2>Ultimos lavados</h2>
-    <div class="list">
+    <div class="list" data-dashboard-wash-list>
       <% ultimos.forEach((lavado) => { %>
-        <div class="row-link" data-row-link="/lavados/<%= lavado.id %>" tabindex="0" role="link">
+        <div class="row-link" data-row-link="/lavados/<%= lavado.id %>" data-dashboard-wash-row data-wash-vehicle="<%= [lavado.chapa, lavado.marca_modelo].filter(Boolean).join(' ') %>" tabindex="0" role="link">
           <a href="/lavados/<%= lavado.id %>"><strong>#<%= lavado.id %> - <%= formatLavadoVehicle(lavado) %><%= lavado.marca_modelo ? ' - ' + lavado.marca_modelo : '' %></strong></a>
           <% if (lavado.fecha_creado) { %>
             <span><%= formatDateTimeShort(lavado.fecha_creado) %></span>
@@ -103,7 +107,8 @@
           <% } %>
         </div>
       <% }) %>
-      <% if (!ultimos.length) { %><p class="empty">Todavia no hay lavados.</p><% } %>
+      <% if (!ultimos.length) { %><p class="empty" data-dashboard-wash-empty><%= searchTerm ? 'Sin lavados para la búsqueda seleccionada.' : 'Todavia no hay lavados.' %></p><% } %>
+      <p class="empty is-hidden" data-dashboard-wash-no-results>Sin lavados para la búsqueda seleccionada.</p>
     </div>
   </div>
 </section>

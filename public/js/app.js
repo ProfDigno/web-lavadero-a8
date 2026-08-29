@@ -394,6 +394,59 @@
     updateCrudSearch();
   });
 
+  document.querySelectorAll("[data-wash-table]").forEach((table) => {
+    const input = table.closest("section")?.querySelector("[data-wash-search]");
+    const rows = Array.from(table.querySelectorAll("[data-wash-row]"));
+    const noResults = table.querySelector("[data-wash-no-results]");
+    const serverEmpty = table.querySelector("[data-wash-server-empty]");
+    if (!input || !rows.length) return;
+
+    const searchableRows = rows.map((row) => ({
+      row,
+      vehicle: normalizeSearchText(row.dataset.washVehicle || "")
+    }));
+
+    function updateWashSearch() {
+      const term = normalizeSearchText(input.value);
+      let visible = 0;
+      searchableRows.forEach((item) => {
+        const match = !term || item.vehicle.includes(term);
+        item.row.classList.toggle("is-hidden", !match);
+        if (match) visible += 1;
+      });
+      if (noResults) noResults.classList.toggle("is-hidden", visible !== 0 || Boolean(serverEmpty));
+    }
+
+    input.addEventListener("input", updateWashSearch);
+    updateWashSearch();
+  });
+
+  document.querySelectorAll("[data-dashboard-wash-list]").forEach((list) => {
+    const input = document.querySelector("[data-dashboard-wash-search]");
+    const rows = Array.from(list.querySelectorAll("[data-dashboard-wash-row]"));
+    const noResults = list.querySelector("[data-dashboard-wash-no-results]");
+    if (!input || !rows.length) return;
+
+    const searchableRows = rows.map((row) => ({
+      row,
+      vehicle: normalizeSearchText(row.dataset.washVehicle || "")
+    }));
+
+    function updateDashboardWashSearch() {
+      const term = normalizeSearchText(input.value);
+      let visible = 0;
+      searchableRows.forEach((item) => {
+        const match = !term || item.vehicle.includes(term);
+        item.row.classList.toggle("is-hidden", !match);
+        if (match) visible += 1;
+      });
+      if (noResults) noResults.classList.toggle("is-hidden", visible !== 0);
+    }
+
+    input.addEventListener("input", updateDashboardWashSearch);
+    updateDashboardWashSearch();
+  });
+
   const roleSelectionRows = Array.from(document.querySelectorAll(".role-select-row[data-role-id]"));
   const rolePermissionRows = Array.from(document.querySelectorAll(".role-item-row[data-role-id]"));
   const rolePermissionPanel = document.querySelector("[data-role-items-panel]");

@@ -1677,6 +1677,8 @@ app.post("/logout", (req, res) => {
 app.get("/", requireAuth, async (req, res, next) => {
   try {
     const fecha = req.query.fecha || todayIso();
+    const searchTerm = String(req.query.q || "").trim();
+    const searchPattern = searchTerm ? `%${searchTerm}%` : "";
     const [caja, resumen, resumenMes, comisiones, ultimos, formasPago] = await Promise.all([
       getCajaDia(fecha),
       query(
@@ -1717,11 +1719,13 @@ app.get("/", requireAuth, async (req, res, next) => {
          left join personal p on p.idpersonal = lp.fk_idpersonal
          join formas_pago fp on fp.idforma_pago = l.fk_idforma_pago
          where l.fecha_creado::date = $1
+           and l.estado = 'EMITIDO'
            and fp.nombre = 'LAVADO'
+           and ($2 = '' or c.chapa ilike $2 or coalesce(c.marca_modelo, '') ilike $2)
          group by l.idlavado, c.chapa, c.marca_modelo, fp.nombre, fp.icono_ruta, fp.color
          order by l.idlavado desc
-         limit 8`,
-        [fecha]
+         limit 100`,
+        [fecha, searchPattern]
       ),
       query(
         `select *
@@ -1740,7 +1744,8 @@ app.get("/", requireAuth, async (req, res, next) => {
       resumenMes: resumenMes.rows[0],
       comisiones: comisiones.rows,
       ultimos: ultimos.rows,
-      formasPago: formasPago.rows
+      formasPago: formasPago.rows,
+      searchTerm
     });
   } catch (error) {
     next(error);
@@ -2533,6 +2538,8 @@ app.get("/analisis-clientes", requireAuth, requireEvent("AnalisisCliente-ocultar
 app.get("/lavados", requireAuth, async (req, res, next) => {
   try {
     const fecha = req.query.fecha || todayIso();
+    const searchTerm = String(req.query.q || "").trim();
+    const searchPattern = searchTerm ? `%${searchTerm}%` : "";
     const formData = req.session.lavadoForm || {};
     delete req.session.lavadoForm;
     const data = await getActiveMasterData();
@@ -2547,12 +2554,13 @@ app.get("/lavados", requireAuth, async (req, res, next) => {
        left join personal p on p.idpersonal = lp.fk_idpersonal
        join formas_pago fp on fp.idforma_pago = l.fk_idforma_pago
        where l.fecha_creado::date = $1
+         and ($2 = '' or c.chapa ilike $2 or coalesce(c.marca_modelo, '') ilike $2)
        group by l.idlavado, c.chapa, c.marca_modelo, fp.nombre, fp.icono_ruta, fp.color
        order by l.idlavado desc
        limit 100`,
-      [fecha]
+      [fecha, searchPattern]
     );
-    res.render("lavados/index", { title: "Lavados", ...data, lavados: lavados.rows, formData, fecha });
+    res.render("lavados/index", { title: "Lavados", ...data, lavados: lavados.rows, formData, fecha, searchTerm });
   } catch (error) {
     next(error);
   }

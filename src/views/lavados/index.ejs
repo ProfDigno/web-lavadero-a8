@@ -164,17 +164,26 @@
         Fecha
         <input type="date" name="fecha" value="<%= fecha %>" onchange="this.form.submit()">
       </label>
+      <label>
+        Buscar vehículo
+        <input type="search" name="q" value="<%= searchTerm %>" placeholder="Chapa o marca/modelo" data-wash-search autocomplete="off">
+      </label>
       <button type="submit" class="secondary">Ver</button>
+      <% if (searchTerm) { %>
+        <a class="button secondary" href="/lavados?fecha=<%= encodeURIComponent(fecha) %>">Limpiar</a>
+      <% } %>
     </form>
   </div>
-  <div class="table-wrap">
+  <div class="table-wrap" data-wash-table>
     <table>
       <thead><tr><th>#</th><th>Auto</th><th>Personal</th><th>Pago</th></tr></thead>
-      <tbody>
+      <tbody data-wash-results>
         <% lavados.forEach((lavado) => { %>
           <tr
             class="wash-row wash-row-link estado-<%= lavado.estado.toLowerCase() %>"
             data-row-link="/lavados/<%= lavado.id %>"
+            data-wash-row
+            data-wash-vehicle="<%= [lavado.chapa, lavado.marca_modelo].filter(Boolean).join(' ') %>"
             tabindex="0"
             role="link">
             <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
@@ -226,7 +235,8 @@
             </td>
           </tr>
         <% }) %>
-        <% if (!lavados.length) { %><tr><td colspan="4">Sin lavados.</td></tr><% } %>
+        <% if (!lavados.length) { %><tr data-wash-server-empty><td colspan="4"><%= searchTerm ? 'Sin lavados para la búsqueda seleccionada.' : 'Sin lavados.' %></td></tr><% } %>
+        <tr class="is-hidden" data-wash-no-results><td colspan="4">Sin lavados para la búsqueda seleccionada.</td></tr>
       </tbody>
     </table>
   </div>
