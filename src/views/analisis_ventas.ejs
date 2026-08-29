@@ -1,0 +1,109 @@
+<%- include('partials/header') %>
+<%
+  const safeJson = JSON.stringify(chartData || {}).replace(/</g, '\\u003c');
+  const hasData = Number(metrics.ventas || 0) > 0;
+%>
+<div class="page-head">
+  <div>
+    <h1>Analisis de ventas</h1>
+    <p>Resumen de ventas, pagos, productos y clientes</p>
+  </div>
+</div>
+
+<form class="toolbar analysis-filter" method="get" action="/analisis-ventas">
+  <label>
+    Fecha inicio
+    <input type="date" name="fecha_inicio" value="<%= fechaInicio %>">
+  </label>
+  <label>
+    Fecha fin
+    <input type="date" name="fecha_fin" value="<%= fechaFin %>">
+  </label>
+  <button type="submit">Ver</button>
+</form>
+
+<section class="metrics analysis-sales-metrics">
+  <article><span>Ventas</span><strong><%= metrics.ventas %></strong></article>
+  <article><span>Total vendido</span><strong><%= formatMoney(metrics.total) %></strong></article>
+  <article><span>Ticket promedio</span><strong><%= formatMoney(metrics.ticket_promedio) %></strong></article>
+  <article><span>Unidades</span><strong><%= metrics.unidades %></strong></article>
+  <article><span>Contado</span><strong><%= metrics.contado %></strong></article>
+  <article><span>Credito</span><strong><%= metrics.credito %></strong></article>
+  <article><span>Creditos pendientes</span><strong><%= metrics.creditos_pendientes %></strong></article>
+</section>
+
+<% if (!hasData || metrics.anuladas) { %>
+  <section class="analysis-alerts">
+    <% if (!hasData) { %><div class="flash">Sin ventas validas en el rango seleccionado.</div><% } %>
+    <% if (metrics.anuladas) { %><div class="flash">Se excluyeron <strong><%= metrics.anuladas %></strong> ventas anuladas del analisis.</div><% } %>
+  </section>
+<% } %>
+
+<section class="analysis-dashboard-grid">
+  <div class="panel chart-panel chart-panel-wide">
+    <h2>Ventas por fecha</h2>
+    <div class="chart-box"><canvas data-sales-chart="daily"></canvas></div>
+  </div>
+  <div class="panel chart-panel">
+    <h2>Formas de pago</h2>
+    <div class="chart-box"><canvas data-sales-chart="payments"></canvas></div>
+  </div>
+  <div class="panel chart-panel">
+    <h2>Productos mas vendidos</h2>
+    <div class="chart-box"><canvas data-sales-chart="products"></canvas></div>
+  </div>
+  <div class="panel chart-panel">
+    <h2>Clientes que mas compran</h2>
+    <div class="chart-box"><canvas data-sales-chart="clients"></canvas></div>
+  </div>
+</section>
+
+<section class="grid two analysis-tables">
+  <div>
+    <h2>Formas de pago</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Forma</th><th class="money-cell">Ventas</th><th class="money-cell">Total</th></tr></thead>
+        <tbody>
+          <% payments.forEach((item) => { %>
+            <tr><td><span class="venta-payment-name" style="--venta-payment-color: <%= item.color || '#687385' %>"><%= item.nombre %></span></td><td class="money-cell"><%= item.cantidad %></td><td class="money-cell"><%= formatMoney(item.total) %></td></tr>
+          <% }) %>
+          <% if (!payments.length) { %><tr><td colspan="3">Sin movimientos.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <h2>Productos mas vendidos</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Producto</th><th class="money-cell">Unidades</th><th class="money-cell">Total</th></tr></thead>
+        <tbody>
+          <% products.forEach((item) => { %>
+            <tr><td><strong><%= item.codigo %></strong> - <%= item.nombre %></td><td class="money-cell"><%= item.cantidad %></td><td class="money-cell"><%= formatMoney(item.total) %></td></tr>
+          <% }) %>
+          <% if (!products.length) { %><tr><td colspan="3">Sin productos vendidos.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div>
+    <h2>Clientes que mas compran</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Cliente</th><th class="money-cell">Compras</th><th class="money-cell">Total</th></tr></thead>
+        <tbody>
+          <% clients.forEach((item) => { %>
+            <tr><td><%= item.nombre || 'Cliente' %></td><td class="money-cell"><%= item.cantidad %></td><td class="money-cell"><%= formatMoney(item.total) %></td></tr>
+          <% }) %>
+          <% if (!clients.length) { %><tr><td colspan="3">Sin clientes identificados.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<script id="analysis-ventas-data" type="application/json"><%- safeJson %></script>
+<script src="/vendor/chart.js/chart.umd.js"></script>
+<script src="/js/analisis_ventas.js"></script>
+<%- include('partials/footer') %>

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title %> - LAVADERO A8</title>
-  <link rel="stylesheet" href="/css/styles.css?v=20260814-4">
+  <link rel="stylesheet" href="/css/styles.css?v=20260815-configuracion-menu">
 </head>
 <body class="<%= user ? 'app-page' : 'auth-page' %>">
   <% if (user) { %>
@@ -19,117 +19,161 @@
       <span class="nav-toggle-icon" aria-hidden="true"><span></span><span></span><span></span></span>
       <span class="nav-toggle-label">Menú</span>
     </button>
+    <% const showAnalisisLavado = canEvent('AnalisisLavado-ocultar'); %>
+    <% const showCliente = canEvent('cliente-ocultar'); %>
+    <% const showAnalisisCliente = canEvent('AnalisisCliente-ocultar'); %>
+    <% const showGrupoCliente = canEvent('grupo_cliente-ocultar'); %>
+    <% const showCreditoGrupo = canEvent('credito_grupo-ocultar'); %>
+    <% const showServicio = canItem('servicio') && canEvent('servicio-ocultar'); %>
+    <% const showPersonal = canEvent('personal-ocultar'); %>
+    <% const showAnalisisPersonal = canEvent('analisis_personal-ocultar'); %>
+    <% const showVale = canEvent('vale-ocultar'); %>
+    <% const showComisiones = canEvent('comisiones-ocultar'); %>
+    <% const showGasto = canEvent('gasto-ocultar'); %>
+    <% const showGastoTipo = canEvent('gasto_tipo-ocultar'); %>
+    <% const showAnalisisGasto = canEvent('AnalisisGasto-ocultar'); %>
+    <% const showPagos = canEvent('pagos-ocultar'); %>
+    <% const showUsuario = canEvent('usuario-ocultar'); %>
+    <% const showUsuarioRoll = canEvent('usuario_roll-ocultar'); %>
+    <% const showUsuarioEvento = canEvent('usuario_evento-ocultar'); %>
+    <% const showFactura = canEvent('factura-ocultar'); %>
+    <% const showFacturaLibre = canEvent('factura_libre-ocultar'); %>
+    <% const showFacturaSend = canEvent('config_facturasend-ocultar'); %>
+    <% const showProductoCategoria = canEvent('producto_categoria-ocultar'); %>
+    <% const showProducto = canEvent('producto-ocultar'); %>
+    <% const showVenta = canEvent('venta-ocultar'); %>
+    <% const showAnalisisVenta = canEvent('AnalisisVenta-ocultar'); %>
+    <% if (cajaMenuRestringido) { %>
+    <nav class="nav" id="main-navigation" aria-label="Navegación principal">
+      <a href="/caja-cierres"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5M8 17h3"/></svg></span>Cierre de caja</a>
+    </nav>
+    <% } else { %>
     <nav class="nav" id="main-navigation" aria-label="Navegación principal">
       <a href="/"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10Z"/><path d="M9 21v-7h6v7"/></svg></span>Inicio</a>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h18M5 12l1.5-5h11L19 12M6 17h12M7 12v5m10-5v5"/></svg></span>Lavados</summary>
         <div class="nav-submenu">
           <a href="/lavados">Registrar lavado</a>
-            <% if (canEvent('AnalisisLavado-ocultar')) { %>
+            <% if (showAnalisisLavado) { %>
               <a href="/analisis-lavados">Analisis general</a>
-            <% } else { %>
-              <a class="nav-link-disabled" href="/analisis-lavados" aria-disabled="true" title="Análisis general deshabilitado para este roll">Analisis general</a>
             <% } %>
         </div>
       </details>
       <% if (canEvent('caja-ocultar')) { %>
         <a href="/caja"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M7 6V4h10v2m-9 7h8"/></svg></span>Caja</a>
-      <% } else { %>
-        <a class="nav-link-disabled" href="/caja" aria-disabled="true" title="Caja deshabilitada para este roll"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M7 6V4h10v2m-9 7h8"/></svg></span>Caja</a>
       <% } %>
       <% if (canEvent('cierre_caja-ocultar')) { %>
         <a href="/caja-cierres"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5M8 17h3"/></svg></span>Cierre de caja</a>
-      <% } else { %>
-        <a class="nav-link-disabled" href="/caja-cierres" aria-disabled="true" title="Cierre de caja deshabilitado para este roll"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5M8 17h3"/></svg></span>Cierre de caja</a>
       <% } %>
+      <% if (showCliente || showAnalisisCliente || showGrupoCliente || showCreditoGrupo) { %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0m3-9a3 3 0 1 0 0-6m0 8a5 5 0 0 1 3 4"/></svg></span>Cliente</summary>
         <div class="nav-submenu">
-          <% if (canEvent('cliente-ocultar')) { %>
+          <% if (showCliente) { %>
             <a href="/clientes">Cliente</a>
-          <% } else { %>
-            <a class="nav-link-disabled" href="/clientes" aria-disabled="true" title="Clientes ocultos para este roll">Cliente</a>
           <% } %>
-          <% if (canEvent('grupo_cliente-ocultar')) { %>
+          <% if (showAnalisisCliente) { %>
+            <a href="/analisis-clientes">Análisis de cliente</a>
+          <% } %>
+          <% if (showGrupoCliente) { %>
             <a href="/grupo-clientes">Grupo de cliente</a>
-          <% } else { %>
-            <a class="nav-link-disabled" href="/grupo-clientes" aria-disabled="true" title="Grupos de clientes ocultos para este roll">Grupo de cliente</a>
           <% } %>
-          <% if (canEvent('credito_grupo-ocultar')) { %>
+          <% if (showCreditoGrupo) { %>
             <a href="/grupo-creditos">Credito por grupo</a>
-          <% } else { %>
-            <a class="nav-link-disabled" href="/grupo-creditos" aria-disabled="true" title="Creditos por grupo ocultos para este roll">Credito por grupo</a>
           <% } %>
         </div>
       </details>
-      <% if (canItem('servicio')) { %>
+      <% } %>
+      <% if (showServicio) { %>
         <details class="nav-menu">
           <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m14.7 6.3 3-3 3 3-3 3m-1-1L9 16l-4 1 1-4 7.7-7.7"/><path d="m13 5 6 6"/></svg></span>Servicio</summary>
           <div class="nav-submenu">
-            <% if (canEvent('servicio-ocultar')) { %>
-              <a href="/servicios">Servicios</a>
-              <a href="/servicio-grupos">Grupos de servicios</a>
-            <% } else { %>
-              <a class="nav-link-disabled" href="/servicios" aria-disabled="true" title="Servicios deshabilitados para este roll">Servicios</a>
-              <a class="nav-link-disabled" href="/servicio-grupos" aria-disabled="true" title="Servicios deshabilitados para este roll">Grupos de servicios</a>
-            <% } %>
+            <a href="/servicios">Servicios</a>
+            <a href="/servicio-grupos">Grupos de servicios</a>
           </div>
         </details>
       <% } %>
+      <% if (showProductoCategoria || showProducto) { %>
+        <details class="nav-menu">
+          <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4z"/><path d="M7 7V4h10v3M8 11h8M8 15h5"/></svg></span>Producto</summary>
+          <div class="nav-submenu">
+            <% if (showProductoCategoria) { %><a href="/producto-categorias">Categoria</a><% } %>
+            <% if (showProducto) { %><a href="/productos">Producto</a><% } %>
+          </div>
+        </details>
+      <% } %>
+      <% if (showVenta || showAnalisisVenta) { %>
+        <details class="nav-menu">
+          <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg></span>Venta</summary>
+          <div class="nav-submenu">
+            <% if (showVenta) { %><a href="/ventas">Venta</a><% } %>
+            <% if (showAnalisisVenta) { %><a href="/analisis-ventas">Analisis venta</a><% } %>
+          </div>
+        </details>
+      <% } %>
+      <% if (showPersonal || showAnalisisPersonal || showVale || showComisiones) { %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 21a7 7 0 0 1 14 0M19 11a3 3 0 0 1 0 6"/></svg></span>Personal</summary>
         <div class="nav-submenu">
-          <% if (canEvent('personal-ocultar')) { %>
+          <% if (showPersonal) { %>
             <a href="/personal">Personal</a>
-          <% } else { %>
-            <a class="nav-link-disabled" href="/personal" aria-disabled="true" title="Personal oculto para este roll">Personal</a>
           <% } %>
-          <% if (canEvent('analisis_personal-ocultar')) { %>
+          <% if (showAnalisisPersonal) { %>
             <a href="/analisis-personal">Analisis de personal</a>
-          <% } else { %>
-            <a class="nav-link-disabled" href="/analisis-personal" aria-disabled="true" title="Analisis de personal oculto para este roll">Analisis de personal</a>
           <% } %>
-          <% if (canEvent('vale-ocultar')) { %>
+          <% if (showVale) { %>
             <a href="/vales">Vales</a>
-          <% } else { %>
-            <a class="nav-link-disabled" href="/vales" aria-disabled="true" title="Vales ocultos para este roll">Vales</a>
           <% } %>
-          <% if (canEvent('comisiones-ocultar')) { %>
+          <% if (showComisiones) { %>
             <a href="/comisiones">Comisiones</a>
-          <% } else { %>
-            <a class="nav-link-disabled" href="/comisiones" aria-disabled="true" title="Comisiones ocultas para este roll">Comisiones</a>
           <% } %>
         </div>
       </details>
+      <% } %>
+      <% if (showGasto || showGastoTipo || showAnalisisGasto) { %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM7 7V5h10v2M8 11h8M8 15h5"/></svg></span>Gasto</summary>
         <div class="nav-submenu">
-          <a href="/gasto-tipos">Gasto tipo</a>
-          <% if (canEvent('gasto-ocultar')) { %>
+          <% if (showGastoTipo) { %>
+            <a href="/gasto-tipos">Gasto tipo</a>
+          <% } %>
+          <% if (showGasto) { %>
             <a href="/gastos">Gasto</a>
-          <% } else { %>
-            <a class="nav-link-disabled" href="/gastos" aria-disabled="true" title="Gastos deshabilitados para este roll">Gasto</a>
+          <% } %>
+          <% if (showAnalisisGasto) { %>
+            <a href="/analisis-gastos">Análisis de gastos</a>
           <% } %>
         </div>
       </details>
+      <% } %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>Factura</summary>
         <div class="nav-submenu">
-          <a href="/facturas">Facturas</a>
-          <a href="/facturas/nueva">Nueva factura libre</a>
-          <a href="/facturasend/config">Configuracion electronica</a>
+          <% if (showFactura) { %><a href="/facturas">Facturas</a><% } %>
+          <% if (showFacturaLibre) { %><a href="/facturas/nueva">Nueva factura libre</a><% } %>
+          <% if (showFacturaSend) { %><a href="/facturasend/config">Configuracion electronica</a><% } %>
         </div>
       </details>
-      <a href="/formas-pago"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></span>Pagos</a>
+      <details class="nav-menu">
+        <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"/><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06-1.42 1.42-.06-.06a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.09 1.65V20h-2v-.31a1.8 1.8 0 0 0-1.09-1.65 1.8 1.8 0 0 0-1.98.36l-.06.06-1.42-1.42.06-.06A1.8 1.8 0 0 0 9.16 15a1.8 1.8 0 0 0-1.65-1.09H7v-2h.51A1.8 1.8 0 0 0 9.16 10a1.8 1.8 0 0 0-.36-1.98l-.06-.06 1.42-1.42.06.06a1.8 1.8 0 0 0 1.98.36A1.8 1.8 0 0 0 13.29 5.3V5h2v.3a1.8 1.8 0 0 0 1.09 1.66 1.8 1.8 0 0 0 1.98-.36l.06-.06 1.42 1.42-.06.06A1.8 1.8 0 0 0 19.42 10a1.8 1.8 0 0 0 1.65 1.09h.3v2h-.3A1.8 1.8 0 0 0 19.4 15Z"/><circle cx="14.29" cy="12.91" r="2.2"/></svg></span>Configuración</summary>
+        <div class="nav-submenu">
+          <% if (showPagos) { %>
+            <a href="/formas-pago"><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></span>Pagos</a>
+          <% } %>
+        </div>
+      </details>
+      <% if (showUsuario || showUsuarioRoll || showUsuarioEvento) { %>
       <details class="nav-menu">
         <summary><span class="nav-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2"/><path d="M3 20a6 6 0 0 1 12 0m1-5a5 5 0 0 1 5 5"/></svg></span>Usuarios</summary>
         <div class="nav-submenu">
-          <a href="/usuarios">Usuario</a>
-          <a href="/usuario-roll">Roll</a>
-          <a href="/usuario-roll-eventos">Evento</a>
+          <% if (showUsuario) { %><a href="/usuarios">Usuario</a><% } %>
+          <% if (showUsuarioRoll) { %><a href="/usuario-roll">Roll</a><% } %>
+          <% if (showUsuarioEvento) { %><a href="/usuario-roll-eventos">Evento</a><% } %>
         </div>
       </details>
+      <% } %>
     </nav>
+    <% } %>
   <% } %>
   <main class="container <%= user ? '' : 'auth-container' %>">
     <% if (flash) { %>

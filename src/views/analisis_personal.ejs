@@ -29,7 +29,7 @@
   </label>
   <label>
     Personal
-    <select name="fk_idpersonal">
+    <select name="fk_idpersonal" data-analysis-personal-select>
       <option value="todos" <%= !selectedPersonalId ? 'selected' : '' %>>Todos</option>
       <% personal.forEach((persona) => { %>
         <option value="<%= persona.id %>" <%= Number(selectedPersonalId || 0) === Number(persona.id) ? 'selected' : '' %>><%= persona.nombre %></option>
@@ -180,7 +180,7 @@
               <tr class="estado-<%= lavado.estado.toLowerCase() %>">
                 <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
                 <td><%= formatDateTime(lavado.fecha_creado) %></td>
-                <td><strong><%= lavado.chapa %></strong><br><small><%= lavado.marca_modelo || '' %></small></td>
+                <td><strong><%= formatLavadoVehicle(lavado) %></strong><br><small><%= lavado.marca_modelo || '' %></small></td>
                 <td><%= lavado.grupo_cliente_nombre || '' %></td>
                 <td><%- include('partials/payment_chip', { nombre: lavado.forma_pago, icono: lavado.forma_pago_icono, color: lavado.forma_pago_color }) %></td>
                 <td><span class="badge <%= lavado.estado.toLowerCase() %>"><%= lavado.estado %></span></td>

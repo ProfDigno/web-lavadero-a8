@@ -1,10 +1,10 @@
 # Diagrama entidad-relación
 
-Este diagrama representa el esquema final de la base de datos después de ejecutar las migraciones hasta `032_column_naming_normalized.sql`.
+Este diagrama representa el esquema final de la base de datos después de ejecutar las migraciones hasta `043_ventas_productos.sql`.
 
 Las tablas y columnas `legacy` de migraciones anteriores no forman parte del modelo vigente. Las claves foráneas opcionales se identifican en los atributos.
 
-![Diagrama entidad-relación](./diagrama-er.png)
+Versión editable en [FigJam](https://www.figma.com/board/o8qw286oqVWPFVdD1P5xQU).
 
 ```mermaid
 erDiagram
@@ -186,6 +186,46 @@ erDiagram
         timestamp ultimo_acceso
         boolean activo
     }
+    PRODUCTO_CATEGORIA {
+        serial idproducto_categoria PK
+        varchar nombre UK
+        varchar descripcion
+        boolean activo
+    }
+    PRODUCTO {
+        serial idproducto PK
+        integer fk_idproducto_categoria FK
+        varchar codigo UK
+        varchar nombre
+        varchar descripcion
+        integer precio_compra
+        integer precio_venta
+        integer stock_actual
+        integer stock_minimo
+        boolean activo
+    }
+    VENTA {
+        serial idventa PK
+        varchar numero UK
+        timestamp fecha_venta
+        integer fk_idcliente FK
+        integer fk_idforma_pago FK
+        varchar condicion
+        varchar estado
+        integer subtotal
+        integer total
+        timestamp pagado_en
+        varchar pagado_por
+    }
+    VENTA_ITEM {
+        serial idventa_item PK
+        integer fk_idventa FK
+        integer fk_idproducto FK
+        integer precio_venta
+        integer precio_compra
+        integer cantidad
+        integer subtotal
+    }
 
     USUARIO_ROLL ||--o{ USUARIOS : "asigna"
     USUARIO_ROLL ||--o{ USUARIO_ROLL_ITEM : "contiene"
@@ -211,6 +251,11 @@ erDiagram
     LAVADOS ||--o{ FACTURAS : "origina"
     FACTURAS ||--o{ FACTURA_ITEMS : "contiene"
     SERVICIOS ||--o{ FACTURA_ITEMS : "factura"
+    PRODUCTO_CATEGORIA ||--o{ PRODUCTO : "clasifica"
+    CLIENTES ||--o{ VENTA : "realiza"
+    FORMAS_PAGO ||--o{ VENTA : "cobra"
+    VENTA ||--o{ VENTA_ITEM : "contiene"
+    PRODUCTO ||--o{ VENTA_ITEM : "se vende"
 ```
 
 ## Convenciones
@@ -218,5 +263,7 @@ erDiagram
 - `PK`: clave primaria.
 - `FK`: clave foránea.
 - `UK`: restricción única.
-- Las FK que pueden estar vacías son: `clientes.fk_idgrupo_cliente`, `lavados.fk_idgrupo_cliente_creditos`, `facturas.fk_idcliente`, `facturas.fk_idlavado` y `factura_items.fk_idservicio`.
+- Las FK que pueden estar vacías son: `clientes.fk_idgrupo_cliente`, `lavados.fk_idgrupo_cliente_creditos`, `facturas.fk_idcliente`, `facturas.fk_idlavado`, `factura_items.fk_idservicio` y `venta.fk_idcliente`.
 - `FACTURASEND_CONFIG` y `TELEGRAM_AUTORIZACIONES` no tienen relaciones FK con otras tablas en el esquema actual.
+- `VENTA.condicion` admite `CONTADO` y `CREDITO`; `VENTA.estado` admite `PENDIENTE`, `PAGADO` y `ANULADO`.
+- Los precios, stock y cantidades de productos y ventas se almacenan como enteros.

@@ -4,12 +4,25 @@ function money(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
 
+function cajaDateRange(value) {
+  const date = new Date(value);
+  const pad = (part) => String(part).padStart(2, "0");
+  const fecha = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const nextDate = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  const siguienteFecha = `${nextDate.getFullYear()}-${pad(nextDate.getMonth() + 1)}-${pad(nextDate.getDate())}`;
+  return {
+    desde: `${fecha} 00:00:00`,
+    hasta: `${siguienteFecha} 00:00:00`
+  };
+}
+
 function sourceValues(movement) {
   return [
     movement.origen === "LAVADO" ? movement.source_id : null,
     movement.origen === "CREDITO" ? movement.source_id : null,
     movement.origen === "GASTO" ? movement.source_id : null,
-    movement.origen === "VALE" ? movement.source_id : null
+    movement.origen === "VALE" ? movement.source_id : null,
+    movement.origen === "VENTA" ? movement.source_id : null
   ];
 }
 
@@ -103,7 +116,9 @@ async function getCajaSesion(id, executor = { query }) {
   const session = sessionResult.rows[0] || null;
   if (!session) return null;
 
-  const [formsResult, movementsResult, denominationsResult] = await Promise.all([
+  const desde = session.abierta_en;
+  const hasta = session.cerrada_en || new Date();
+  const [formsResult, movementsResult, denominationsResult, pendingCreditsResult] = await Promise.all([
     executor.query(
       `select *
        from caja_sesion_formas_pago
@@ -124,14 +139,16 @@ async function getCajaSesion(id, executor = { query }) {
        where fk_idcaja_sesion = $1
        order by tipo, valor desc`,
       [id]
-    )
+    ),
+    getCajaCreditosPendientes(desde, hasta, executor)
   ]);
 
   return {
     ...session,
     formas_pago: formsResult.rows,
     movimientos: movementsResult.rows,
-    denominaciones: denominationsResult.rows
+    denominaciones: denominationsResult.rows,
+    creditos_pendientes: pendingCreditsResult
   };
 }
 
@@ -149,7 +166,7 @@ async function getCajaSesiones({ limit = 30, offset = 0 } = {}, executor = { que
 }
 
 async function getCajaMovimientosElegibles(desde, hasta, executor = { query }) {
-  const [lavados, creditos, gastos, vales] = await Promise.all([
+  const [lavados, creditos, gastos, vales, ventas, ventasRevertidas] = await Promise.all([
     executor.query(
       `select l.idlavado as source_id,
               'INGRESO' as tipo, 'LAVADO' as origen,
@@ -244,11 +261,196 @@ async function getCajaMovimientosElegibles(desde, hasta, executor = { query }) {
          )
        order by v.ocurrido_en, v.idvales_personal`,
       [desde, hasta]
+    ),
+    executor.query(
+      `select v.idventa as source_id,
+              'INGRESO' as tipo, 'VENTA' as origen,
+              v.fk_idforma_pago,
+              v.total as monto,
+              case when v.condicion = 'CREDITO' then v.pagado_en else v.fecha_venta end as ocurrido_en,
+              fp.nombre as forma_pago_nombre, fp.icono_ruta as forma_pago_icono,
+              fp.color as forma_pago_color,
+              ('Venta ' || v.numero) as referencia,
+              coalesce(nullif(concat_ws(' - ', nullif(trim(c.chapa), ''), nullif(trim(c.marca_modelo), '')), ''), 'Mostrador') as descripcion
+       from venta v
+       left join clientes c on c.idcliente = v.fk_idcliente
+       join formas_pago fp on fp.idforma_pago = v.fk_idforma_pago
+       where v.estado = 'PAGADO'
+         and (case when v.condicion = 'CREDITO' then v.pagado_en else v.fecha_venta end) >= $1
+         and (case when v.condicion = 'CREDITO' then v.pagado_en else v.fecha_venta end) < $2
+         and v.total > 0
+         and not exists (
+           select 1 from caja_sesion_movimientos csm
+           where csm.fk_idventa = v.idventa
+             and csm.tipo = 'INGRESO'
+         )
+       order by ocurrido_en, v.idventa`,
+      [desde, hasta]
+    ),
+    executor.query(
+      `select v.idventa as source_id,
+              'EGRESO' as tipo, 'VENTA' as origen,
+              v.fk_idforma_pago,
+              v.total as monto,
+              v.anulado_en as ocurrido_en,
+              fp.nombre as forma_pago_nombre, fp.icono_ruta as forma_pago_icono,
+              fp.color as forma_pago_color,
+              ('Reversion venta ' || v.numero) as referencia,
+              coalesce(nullif(concat_ws(' - ', nullif(trim(c.chapa), ''), nullif(trim(c.marca_modelo), '')), ''), 'Mostrador') as descripcion
+       from venta v
+       left join clientes c on c.idcliente = v.fk_idcliente
+       join formas_pago fp on fp.idforma_pago = v.fk_idforma_pago
+       where v.estado = 'ANULADO'
+         and v.anulado_en >= $1
+         and v.anulado_en < $2
+         and v.total > 0
+         and exists (
+           select 1 from caja_sesion_movimientos csm
+           where csm.fk_idventa = v.idventa
+             and csm.tipo = 'INGRESO'
+         )
+         and not exists (
+           select 1 from caja_sesion_movimientos csm
+           where csm.fk_idventa = v.idventa
+             and csm.tipo = 'EGRESO'
+         )
+       order by v.anulado_en, v.idventa`,
+      [desde, hasta]
     )
   ]);
 
-  return [...lavados.rows, ...creditos.rows, ...gastos.rows, ...vales.rows]
+  return [...lavados.rows, ...creditos.rows, ...gastos.rows, ...vales.rows, ...ventas.rows, ...ventasRevertidas.rows]
     .sort((a, b) => new Date(a.ocurrido_en) - new Date(b.ocurrido_en));
+}
+
+async function sincronizarCajaSesionAbierta(executor = { query }, hasta = new Date()) {
+  const sessionResult = await executor.query(
+    `select idcaja_sesion, abierta_en
+     from caja_sesiones
+     where estado = 'ABIERTA'
+     order by abierta_en desc
+     limit 1`
+  );
+  const session = sessionResult.rows[0];
+  if (!session) return 0;
+
+  const desde = session.abierta_en;
+  const movimientos = await getCajaMovimientosElegibles(desde, hasta, executor);
+  for (const movement of movimientos) {
+    const source = sourceValues(movement);
+    await executor.query(
+      `insert into caja_sesion_movimientos (
+         fk_idcaja_sesion, tipo, origen,
+         fk_idlavado, fk_idgrupo_cliente_creditos, fk_idgasto, fk_idvales_personal, fk_idventa,
+         fk_idforma_pago, monto, ocurrido_en,
+         forma_pago_nombre, forma_pago_icono, forma_pago_color, referencia, descripcion
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       on conflict do nothing`,
+      [
+        session.idcaja_sesion, movement.tipo, movement.origen,
+        source[0], source[1], source[2], source[3], source[4],
+        movement.fk_idforma_pago, money(movement.monto), movement.ocurrido_en,
+        movement.forma_pago_nombre, movement.forma_pago_icono, movement.forma_pago_color,
+        movement.referencia, movement.descripcion
+      ]
+    );
+  }
+  return movimientos.length;
+}
+
+async function registrarVentaPagadaEnCaja(ventaId, executor = { query }) {
+  const result = await executor.query(
+    `select v.idventa, v.numero, v.total, v.fk_idforma_pago,
+            case when v.condicion = 'CREDITO' then v.pagado_en else v.fecha_venta end as ocurrido_en,
+            fp.nombre as forma_pago_nombre, fp.icono_ruta as forma_pago_icono,
+            fp.color as forma_pago_color,
+            coalesce(nullif(concat_ws(' - ', nullif(trim(c.chapa), ''), nullif(trim(c.marca_modelo), '')), ''), 'Mostrador') as descripcion,
+            cs.idcaja_sesion
+     from venta v
+     left join clientes c on c.idcliente = v.fk_idcliente
+     join formas_pago fp on fp.idforma_pago = v.fk_idforma_pago
+     join caja_sesiones cs on cs.estado = 'ABIERTA'
+       and (case when v.condicion = 'CREDITO' then v.pagado_en else v.fecha_venta end) >= cs.abierta_en
+     where v.idventa = $1
+       and v.estado = 'PAGADO'
+       and v.total > 0
+     order by cs.abierta_en desc
+     limit 1`,
+    [ventaId]
+  );
+  const venta = result.rows[0];
+  if (!venta) return false;
+  await executor.query(
+    `insert into caja_sesion_movimientos (
+       fk_idcaja_sesion, tipo, origen,
+       fk_idventa, fk_idforma_pago, monto, ocurrido_en,
+       forma_pago_nombre, forma_pago_icono, forma_pago_color, referencia, descripcion
+     ) values ($1, 'INGRESO', 'VENTA', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     on conflict (fk_idventa, tipo) where fk_idventa is not null do nothing`,
+    [venta.idcaja_sesion, venta.idventa, venta.fk_idforma_pago, money(venta.total), venta.ocurrido_en,
+      venta.forma_pago_nombre, venta.forma_pago_icono, venta.forma_pago_color,
+      `Venta ${venta.numero}`, venta.descripcion]
+  );
+  return true;
+}
+
+async function registrarReversionVentaEnCaja(ventaId, executor = { query }) {
+  const result = await executor.query(
+    `select v.idventa, v.numero, v.total, v.fk_idforma_pago, v.anulado_en,
+            fp.nombre as forma_pago_nombre, fp.icono_ruta as forma_pago_icono,
+            fp.color as forma_pago_color,
+            coalesce(nullif(concat_ws(' - ', nullif(trim(c.chapa), ''), nullif(trim(c.marca_modelo), '')), ''), 'Mostrador') as descripcion,
+            cs.idcaja_sesion
+     from venta v
+     left join clientes c on c.idcliente = v.fk_idcliente
+     join formas_pago fp on fp.idforma_pago = v.fk_idforma_pago
+     join caja_sesiones cs on cs.estado = 'ABIERTA'
+       and v.anulado_en >= cs.abierta_en
+     where v.idventa = $1
+       and v.estado = 'ANULADO'
+       and v.total > 0
+       and exists (
+         select 1 from caja_sesion_movimientos csm
+         where csm.fk_idventa = v.idventa and csm.tipo = 'INGRESO'
+       )
+     order by cs.abierta_en desc
+     limit 1`,
+    [ventaId]
+  );
+  const venta = result.rows[0];
+  if (!venta) return false;
+  await executor.query(
+    `insert into caja_sesion_movimientos (
+       fk_idcaja_sesion, tipo, origen,
+       fk_idventa, fk_idforma_pago, monto, ocurrido_en,
+       forma_pago_nombre, forma_pago_icono, forma_pago_color, referencia, descripcion
+     ) values ($1, 'EGRESO', 'VENTA', $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     on conflict (fk_idventa, tipo) where fk_idventa is not null do nothing`,
+    [venta.idcaja_sesion, venta.idventa, venta.fk_idforma_pago, money(venta.total), venta.anulado_en,
+      venta.forma_pago_nombre, venta.forma_pago_icono, venta.forma_pago_color,
+      `Reversion venta ${venta.numero}`, venta.descripcion]
+  );
+  return true;
+}
+
+async function getCajaCreditosPendientes(desde, hasta, executor = { query }) {
+  const result = await executor.query(
+    `select fp.idforma_pago as fk_idforma_pago,
+            fp.nombre as forma_pago_nombre, fp.icono_ruta as forma_pago_icono,
+            fp.color as forma_pago_color,
+            count(l.idlavado)::int as cantidad,
+            coalesce(sum(l.total), 0) as total
+     from lavados l
+     join formas_pago fp on fp.idforma_pago = l.fk_idforma_pago
+     where l.fecha_creado >= $1
+       and l.fecha_creado < $2
+       and l.estado = 'CREDITO'
+       and l.condicion = 'CREDITO'
+     group by fp.idforma_pago, fp.nombre, fp.icono_ruta, fp.color
+     order by fp.nombre`,
+    [desde, hasta]
+  );
+  return result.rows;
 }
 
 async function abrirCajaSesion({ abiertaPor, saldoInicialEfectivo = 0, observaciones = null, creadoPor }) {
@@ -281,26 +483,40 @@ async function cerrarCajaSesion({ id, cerradaPor, denominaciones = [], observaci
     if (session.estado !== "ABIERTA") throw new Error("La sesión de caja ya está cerrada.");
 
     const cerradaEn = new Date();
-    const movimientos = await getCajaMovimientosElegibles(session.abierta_en, cerradaEn, client);
+    const desde = session.abierta_en;
+    const hasta = cerradaEn;
+    await sincronizarCajaSesionAbierta(client, cerradaEn);
+    const storedMovementsResult = await client.query(
+      `select * from caja_sesion_movimientos
+       where fk_idcaja_sesion = $1
+       order by ocurrido_en, idcaja_sesion_movimiento`,
+      [id]
+    );
+    const movimientosAlmacenados = storedMovementsResult.rows;
+    const movimientosNuevos = await getCajaMovimientosElegibles(desde, hasta, client);
+    const movimientos = [...movimientosAlmacenados, ...movimientosNuevos];
+    const almacenados = new Set(movimientosAlmacenados);
     const formas = new Map();
 
     for (const movement of movimientos) {
       const source = sourceValues(movement);
-      await client.query(
-        `insert into caja_sesion_movimientos (
-           fk_idcaja_sesion, tipo, origen,
-           fk_idlavado, fk_idgrupo_cliente_creditos, fk_idgasto, fk_idvales_personal,
-           fk_idforma_pago, monto, ocurrido_en,
-           forma_pago_nombre, forma_pago_icono, forma_pago_color, referencia, descripcion
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-        [
-          id, movement.tipo, movement.origen,
-          source[0], source[1], source[2], source[3],
-          movement.fk_idforma_pago, money(movement.monto), movement.ocurrido_en,
-          movement.forma_pago_nombre, movement.forma_pago_icono, movement.forma_pago_color,
-          movement.referencia, movement.descripcion
-        ]
-      );
+      if (!almacenados.has(movement)) {
+        await client.query(
+          `insert into caja_sesion_movimientos (
+             fk_idcaja_sesion, tipo, origen,
+             fk_idlavado, fk_idgrupo_cliente_creditos, fk_idgasto, fk_idvales_personal, fk_idventa,
+             fk_idforma_pago, monto, ocurrido_en,
+             forma_pago_nombre, forma_pago_icono, forma_pago_color, referencia, descripcion
+           ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+          [
+            id, movement.tipo, movement.origen,
+            source[0], source[1], source[2], source[3], source[4],
+            movement.fk_idforma_pago, money(movement.monto), movement.ocurrido_en,
+            movement.forma_pago_nombre, movement.forma_pago_icono, movement.forma_pago_color,
+            movement.referencia, movement.descripcion
+          ]
+        );
+      }
 
       const formaId = String(movement.fk_idforma_pago);
       if (!formas.has(formaId)) {
@@ -324,7 +540,14 @@ async function cerrarCajaSesion({ id, cerradaPor, denominaciones = [], observaci
         `insert into caja_sesion_formas_pago (
            fk_idcaja_sesion, fk_idforma_pago, forma_pago_nombre,
            forma_pago_icono, forma_pago_color, ingresos, egresos, neto
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+         ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+         on conflict (fk_idcaja_sesion, fk_idforma_pago) do update set
+           forma_pago_nombre = excluded.forma_pago_nombre,
+           forma_pago_icono = excluded.forma_pago_icono,
+           forma_pago_color = excluded.forma_pago_color,
+           ingresos = excluded.ingresos,
+           egresos = excluded.egresos,
+           neto = excluded.neto`,
         [id, forma.fk_idforma_pago, forma.forma_pago_nombre, forma.forma_pago_icono,
           forma.forma_pago_color, forma.ingresos, forma.egresos, money(forma.ingresos - forma.egresos)]
       );
@@ -377,10 +600,61 @@ async function cerrarCajaSesion({ id, cerradaPor, denominaciones = [], observaci
   });
 }
 
+async function editarSaldoInicialCaja({ id, saldoInicialEfectivo }) {
+  if (!id) throw new Error("Debe indicar la sesión de caja.");
+  const saldo = money(saldoInicialEfectivo);
+  if (saldo < 0) throw new Error("El saldo inicial no puede ser negativo.");
+
+  return withTransaction(async (client) => {
+    const sessionResult = await client.query(
+      `select * from caja_sesiones where idcaja_sesion = $1 for update`,
+      [id]
+    );
+    const session = sessionResult.rows[0];
+    if (!session) throw new Error("Sesión de caja no encontrada.");
+
+    const movimientos = session.estado === "CERRADA"
+      ? (await client.query(
+        `select * from caja_sesion_movimientos
+         where fk_idcaja_sesion = $1
+         order by ocurrido_en, idcaja_sesion_movimiento`,
+        [id]
+      )).rows
+      : await (async () => {
+        const { desde, hasta } = cajaDateRange(session.abierta_en);
+        return getCajaMovimientosElegibles(desde, hasta, client);
+      })();
+    const resumen = summarizeCajaMovimientos(movimientos, saldo);
+    const efectivoContado = session.efectivo_contado === null
+      ? null
+      : money(session.efectivo_contado);
+    const diferencia = efectivoContado === null
+      ? null
+      : money(efectivoContado - resumen.efectivoEsperado);
+
+    await client.query(
+      `update caja_sesiones
+       set saldo_inicial_efectivo = $1,
+           efectivo_esperado = $2,
+           diferencia = $3
+       where idcaja_sesion = $4`,
+      [saldo, resumen.efectivoEsperado, diferencia, id]
+    );
+
+    return getCajaSesion(id, client);
+  });
+}
+
 module.exports = {
   abrirCajaSesion,
+  cajaDateRange,
   cerrarCajaSesion,
+  editarSaldoInicialCaja,
+  getCajaCreditosPendientes,
   getCajaMovimientosElegibles,
+  registrarReversionVentaEnCaja,
+  sincronizarCajaSesionAbierta,
+  registrarVentaPagadaEnCaja,
   getCajaSesion,
   getCajaSesionAbierta,
   getCajaSesiones,

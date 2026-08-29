@@ -1,5 +1,6 @@
 <%- include('partials/header') %>
 <% const efectivoFormaPago = formasPago.find((forma) => String(forma.nombre || '').toUpperCase() === 'EFECTIVO'); %>
+<% const filterQuery = `fecha_inicio=${encodeURIComponent(fechaInicio)}&fecha_fin=${encodeURIComponent(fechaFin)}&fk_idpersonal=${encodeURIComponent(selectedPersonalId || 'todos')}`; %>
 <div class="page-head">
   <div>
     <h1>Vales</h1>
@@ -11,10 +12,24 @@
 <section class="grid one">
   <form class="toolbar" method="get" action="/vales">
     <label>
-      Fecha
-      <input type="date" name="fecha" value="<%= fecha %>">
+      Fecha de pago desde
+      <input type="date" name="fecha_inicio" value="<%= fechaInicio %>">
+    </label>
+    <label>
+      Fecha de pago hasta
+      <input type="date" name="fecha_fin" value="<%= fechaFin %>">
+    </label>
+    <label>
+      Personal
+      <select name="fk_idpersonal">
+        <option value="todos" <%= !selectedPersonalId ? 'selected' : '' %>>Todos</option>
+        <% personal.forEach((item) => { %>
+          <option value="<%= item.id %>" <%= selectedPersonalId === Number(item.id) ? 'selected' : '' %>><%= item.nombre %></option>
+        <% }) %>
+      </select>
     </label>
     <button type="submit">Ver</button>
+    <a class="button secondary" href="/vales">Limpiar</a>
   </form>
 
   <div class="table-wrap">
@@ -43,14 +58,16 @@
             <td><%= formatDateTime(vale.fecha_creado) %></td>
             <td class="cell-actions">
               <% if (vale.estado !== 'ANULADO') { %>
-                <a class="icon-button" href="/vales?fecha=<%= fecha %>&edit=<%= vale.id %>" aria-label="Editar" title="Editar">
+                <a class="icon-button" href="/vales?<%= filterQuery %>&edit=<%= vale.id %>" aria-label="Editar" title="Editar">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M4 20h4l10.5-10.5-4-4L4 16v4z"></path>
                     <path d="M13.5 6.5l4 4"></path>
                   </svg>
                 </a>
                 <form method="post" action="/vales/<%= vale.id %>/anular" data-confirm="Anular este vale dejara el monto en cero y actualizara la comision diaria.">
-                  <input type="hidden" name="fecha" value="<%= fecha %>">
+                  <input type="hidden" name="fecha_inicio" value="<%= fechaInicio %>">
+                  <input type="hidden" name="fecha_fin" value="<%= fechaFin %>">
+                  <input type="hidden" name="fk_idpersonal" value="<%= selectedPersonalId || 'todos' %>">
                   <button class="link" type="submit">Anular</button>
                 </form>
               <% } %>
@@ -58,7 +75,7 @@
           </tr>
         <% }) %>
         <% if (!vales.length) { %>
-          <tr><td colspan="8">Sin vales para la fecha.</td></tr>
+          <tr><td colspan="8">Sin vales para el rango seleccionado.</td></tr>
         <% } %>
       </tbody>
     </table>
@@ -74,6 +91,9 @@
     data-create-action="/vales"
     data-new-title="Nuevo vale">
     <h2 data-crud-modal-title><%= editItem ? 'Editar vale' : 'Nuevo vale' %></h2>
+    <input type="hidden" name="redirect_fecha_inicio" value="<%= fechaInicio %>">
+    <input type="hidden" name="redirect_fecha_fin" value="<%= fechaFin %>">
+    <input type="hidden" name="redirect_fk_idpersonal" value="<%= selectedPersonalId || 'todos' %>">
     <label>
       Personal
       <select name="fk_idpersonal" required>
@@ -85,7 +105,7 @@
     </label>
     <label>
       Fecha de pago
-      <input type="date" name="fecha_pago" value="<%= editItem ? formatDateInput(editItem.fecha_pago) : fecha %>" data-default-value="<%= fecha %>" required>
+      <input type="date" name="fecha_pago" value="<%= editItem ? formatDateInput(editItem.fecha_pago) : fechaInicio %>" data-default-value="<%= fechaInicio %>" required>
     </label>
     <div class="vale-saldo-box" data-vale-saldo-box>
       <span>Saldo disponible del dia</span>

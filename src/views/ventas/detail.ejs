@@ -1,0 +1,98 @@
+<%- include('../partials/header') %>
+<div class="page-head">
+  <div>
+    <h1>Venta <%= venta.numero %></h1>
+    <p>Detalle de la operación registrada</p>
+  </div>
+  <a class="button secondary" href="/ventas">Volver a ventas</a>
+</div>
+
+<section class="metrics compact venta-detail-metrics">
+  <article><span>Estado</span><strong><%= venta.estado %></strong></article>
+  <article><span>Condición</span><strong class="venta-condition-badge <%= venta.condicion === 'CREDITO' ? 'is-credit' : 'is-cash' %>"><%= venta.condicion %></strong></article>
+  <article><span>Cliente</span><strong><%= venta.cliente_nombre %></strong></article>
+  <article><span>Forma de pago</span><strong class="venta-payment-name" style="--venta-payment-color: <%= venta.forma_pago_color || '#687385' %>"><%= venta.forma_pago %></strong></article>
+  <article><span>Total</span><strong><%= formatMoney(venta.total) %></strong></article>
+</section>
+
+<section class="panel venta-detail-panel">
+  <div class="section-title">
+    <div><h2>Productos vendidos</h2><p>Fecha: <%= formatDateTime(venta.fecha_venta) %></p></div>
+    <div class="actions">
+      <% if (venta.condicion === 'CREDITO' && venta.estado === 'PENDIENTE') { %>
+        <form method="post" action="/ventas/<%= venta.idventa %>/marcar-pagada">
+          <button type="submit" class="secondary">Marcar pagada</button>
+        </form>
+      <% } %>
+      <% if (venta.estado !== 'ANULADO') { %>
+        <form method="post" action="/ventas/<%= venta.idventa %>/anular" data-anular-form>
+          <button type="submit" class="venta-anular-button">Anular venta</button>
+        </form>
+      <% } %>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Código</th><th>Producto</th><th>Cantidad</th><th class="money-cell">Precio venta</th><th class="money-cell">Precio compra</th><th class="money-cell">Subtotal</th></tr></thead>
+      <tbody>
+        <% venta.items.forEach((item) => { %>
+          <tr><td><%= item.codigo %></td><td><%= item.producto_nombre %></td><td><%= item.cantidad %></td><td class="money-cell"><%= formatMoney(item.precio_venta) %></td><td class="money-cell"><%= formatMoney(item.precio_compra) %></td><td class="money-cell"><%= formatMoney(item.subtotal) %></td></tr>
+        <% }) %>
+      </tbody>
+      <tfoot><tr><th colspan="5" class="money-cell">Total</th><th class="money-cell"><%= formatMoney(venta.total) %></th></tr></tfoot>
+    </table>
+  </div>
+  <% if (venta.pagado_en) { %><p class="hint">Pagada el <%= formatDateTime(venta.pagado_en) %> por <%= venta.pagado_por %>.</p><% } %>
+  <% if (venta.anulado_en) { %><p class="hint">Anulada el <%= formatDateTime(venta.anulado_en) %> por <%= venta.anulado_por %>.</p><% } %>
+</section>
+
+<div class="modal-backdrop is-hidden" data-anular-modal role="dialog" aria-modal="true" aria-labelledby="venta-anular-modal-title">
+  <section class="anular-modal-panel" data-anular-modal-panel>
+    <div class="anular-modal-header">
+      <div class="anular-modal-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 3 3.8 6.5v5.2c0 4.6 3.3 7.9 8.2 9.3 4.9-1.4 8.2-4.7 8.2-9.3V6.5L12 3z"></path>
+          <path d="M12 8v4m0 3h.01"></path>
+        </svg>
+      </div>
+      <div>
+        <h2 id="venta-anular-modal-title">¿Anular venta?</h2>
+        <p>Esta acción repondrá el stock de los productos vendidos.</p>
+      </div>
+      <button class="anular-modal-close" type="button" data-anular-modal-cancel aria-label="Cerrar">×</button>
+    </div>
+
+    <div class="anular-modal-facts">
+      <div class="anular-modal-fact">
+        <span>Venta</span>
+        <strong>#<%= venta.numero %></strong>
+      </div>
+      <div class="anular-modal-fact">
+        <span>Cliente</span>
+        <strong><%= venta.cliente_nombre || 'Mostrador' %></strong>
+      </div>
+      <div class="anular-modal-fact">
+        <span>Condición</span>
+        <strong class="venta-condition-badge <%= venta.condicion === 'CREDITO' ? 'is-credit' : 'is-cash' %>"><%= venta.condicion %></strong>
+      </div>
+      <div class="anular-modal-fact">
+        <span>Forma de pago</span>
+        <strong class="venta-payment-name" style="--venta-payment-color: <%= venta.forma_pago_color || '#687385' %>"><%= venta.forma_pago %></strong>
+      </div>
+      <div class="anular-modal-total">
+        <span>Monto a anular</span>
+        <strong><%= formatMoney(venta.total) %></strong>
+      </div>
+    </div>
+
+    <p class="anular-modal-warning">
+      La venta se conservará como anulada y sus productos volverán a estar disponibles en el stock.
+    </p>
+
+    <div class="anular-modal-actions">
+      <button class="secondary" type="button" data-anular-modal-cancel>Cancelar</button>
+      <button class="anular-modal-confirm" type="button" data-anular-modal-confirm>Anular venta</button>
+    </div>
+  </section>
+</div>
+<%- include('../partials/footer') %>

@@ -1,6 +1,14 @@
 (function () {
   const navToggle = document.querySelector(".nav-toggle");
   const mainNavigation = document.querySelector("#main-navigation");
+  const analysisPersonalSelect = document.querySelector("[data-analysis-personal-select]");
+
+  if (analysisPersonalSelect) {
+    analysisPersonalSelect.addEventListener("change", () => {
+      const form = analysisPersonalSelect.closest("form");
+      if (form) form.submit();
+    });
+  }
 
   if (navToggle && mainNavigation) {
     const desktopQuery = window.matchMedia("(min-width: 1000px)");
@@ -21,6 +29,33 @@
     navToggle.addEventListener("click", toggleNavigation);
     mainNavigation.querySelectorAll("a").forEach((link) => link.addEventListener("click", closeNavigation));
 
+    const navMenus = Array.from(mainNavigation.querySelectorAll("details.nav-menu"));
+
+    function positionOpenSubmenus() {
+      if (!window.matchMedia("(min-width: 1000px)").matches) return;
+      navMenus.forEach((menu) => {
+        if (!menu.open) return;
+        const summary = menu.querySelector("summary");
+        const submenu = menu.querySelector(".nav-submenu");
+        if (!summary || !submenu) return;
+        const rect = summary.getBoundingClientRect();
+        submenu.style.setProperty("--submenu-top", `${Math.max(12, rect.top)}px`);
+        submenu.style.setProperty("--submenu-left", `${rect.right + 10}px`);
+      });
+    }
+
+    navMenus.forEach((menu) => {
+      menu.addEventListener("toggle", () => {
+        if (!menu.open) return;
+        window.requestAnimationFrame(() => {
+          positionOpenSubmenus();
+        });
+      });
+    });
+
+    window.addEventListener("resize", positionOpenSubmenus);
+    mainNavigation.addEventListener("scroll", positionOpenSubmenus, { passive: true });
+
     document.addEventListener("click", (event) => {
       if (navToggle.getAttribute("aria-expanded") !== "true") return;
       if (!mainNavigation.contains(event.target) && !navToggle.contains(event.target)) closeNavigation();
@@ -38,7 +73,7 @@
     });
   }
 
-  const clientSelect = document.querySelector("[data-client-select]");
+  const clientIdInput = document.querySelector("[data-client-id]");
   const quickClient = document.querySelector("[data-quick-client]");
   const clientSearch = document.querySelector("[data-client-search]");
   const clientResults = document.querySelector("[data-client-results]");
@@ -81,8 +116,9 @@
     select.addEventListener("change", () => prefillClientFromGroup(select));
   });
 
-  if (clientSelect && quickClient) {
+  if (clientIdInput && quickClient) {
     let clientOptions = [];
+    let chapaLookupSequence = 0;
     const quickFields = {
       chapa: quickClient.querySelector("input[name='nueva_chapa']"),
       marcaModelo: quickClient.querySelector("input[name='nuevo_marca_modelo']"),
@@ -94,6 +130,52 @@
       grupo: quickClient.querySelector("select[name='nuevo_grupo_cliente_id']")
     };
     const quickRucStatus = quickClient.querySelector("[data-quick-ruc-status]");
+    const quickDetails = quickClient.querySelector("[data-quick-details]");
+    const quickDetailsToggle = quickClient.querySelector("[data-quick-details-toggle]");
+
+    function setQuickDetailsExpanded(expanded) {
+      if (!quickDetails || !quickDetailsToggle) return;
+      quickDetails.classList.toggle("is-hidden", !expanded);
+      quickDetailsToggle.setAttribute("aria-expanded", String(expanded));
+      quickDetailsToggle.textContent = expanded ? "Ocultar datos adicionales" : "Mostrar datos adicionales";
+    }
+
+    quickDetailsToggle?.addEventListener("click", () => {
+      const expanded = quickDetailsToggle.getAttribute("aria-expanded") === "true";
+      setQuickDetailsExpanded(!expanded);
+    });
+
+    function setDetectedClientReadonly(readonly) {
+      [quickFields.marcaModelo, quickFields.ruc, quickFields.nombre, quickFields.telefono, quickFields.direccion, quickFields.email]
+        .filter(Boolean)
+        .forEach((input) => {
+          input.readOnly = readonly;
+        });
+      if (quickFields.grupo) quickFields.grupo.disabled = readonly;
+    }
+
+    function normalizeChapa(value) {
+      return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+    }
+
+    function clearDetectedClientFields() {
+      if (quickClient.dataset.detectedClient !== "true") return;
+      [quickFields.marcaModelo, quickFields.ruc, quickFields.nombre, quickFields.telefono, quickFields.direccion, quickFields.email]
+        .filter(Boolean)
+        .forEach((input) => {
+          input.value = "";
+        });
+      if (quickFields.grupo) quickFields.grupo.value = "";
+      delete quickClient.dataset.detectedClient;
+    }
+
+    function resetDetectedClient() {
+      chapaLookupSequence += 1;
+      clientIdInput.value = "";
+      clearDetectedClientFields();
+      setDetectedClientReadonly(false);
+      syncClientMode();
+    }
 
     function setQuickRucStatus(message, state) {
       if (!quickRucStatus) return;
@@ -139,93 +221,67 @@
 
     quickFields.ruc?.addEventListener("blur", lookupQuickRuc);
 
+    async function lookupQuickChapa() {
+      const chapa = normalizeChapa(quickFields.chapa?.value);
+      if (!chapa) return;
+      const lookupSequence = ++chapaLookupSequence;
+      try {
+        const response = await fetch(`/clientes/buscar?q=${encodeURIComponent(chapa)}`, {
+          headers: { Accept: "application/json" }
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (lookupSequence !== chapaLookupSequence || normalizeChapa(quickFields.chapa?.value) !== chapa) return;
+        const cliente = (data.clientes || []).find((item) => normalizeChapa(item.chapa) === chapa);
+        if (!cliente) return;
+
+        clientIdInput.value = cliente.id || "";
+        quickFields.chapa.value = cliente.chapa || quickFields.chapa.value;
+        quickFields.marcaModelo.value = cliente.marca_modelo || "";
+        quickFields.ruc.value = cliente.ruc || "";
+        quickFields.nombre.value = cliente.nombre || "";
+        quickFields.telefono.value = cliente.telefono || "";
+        quickFields.direccion.value = cliente.direccion || "";
+        quickFields.email.value = cliente.email || "";
+        if (quickFields.grupo) quickFields.grupo.value = cliente.grupo_cliente_id || cliente.fk_idgrupo_cliente || "";
+        quickClient.dataset.detectedClient = "true";
+        setDetectedClientReadonly(true);
+        syncClientMode(true);
+      } catch (error) {
+        // La búsqueda automática es auxiliar; si falla, se mantiene el alta rápida.
+      }
+    }
+
+    quickFields.chapa?.addEventListener("input", () => {
+      if (clientIdInput.value || quickClient.dataset.detectedClient === "true") resetDetectedClient();
+      else chapaLookupSequence += 1;
+    });
+
+    quickFields.chapa?.addEventListener("blur", lookupQuickChapa);
+
     function optionText(cliente) {
       return `${cliente.chapa} - ${cliente.marca_modelo}${cliente.nombre ? ` - ${cliente.nombre}` : ""}${cliente.grupo_nombre ? ` (${cliente.grupo_nombre})` : ""}`;
     }
 
-    function optionSearch(cliente) {
-      return [cliente.chapa, cliente.marca_modelo, cliente.nombre, cliente.ruc, cliente.telefono, cliente.email]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-    }
-
-    function rebuildClientOptions(clientes, selectedId) {
-      const currentValue = selectedId || clientSelect.value;
-      clientSelect.innerHTML = "";
-      const empty = document.createElement("option");
-      empty.value = "";
-      empty.textContent = "Crear cliente rapido";
-      clientSelect.appendChild(empty);
-      clientes.forEach((cliente) => {
-        const option = document.createElement("option");
-        option.value = cliente.id;
-        option.textContent = optionText(cliente);
-        option.dataset.search = optionSearch(cliente);
-        option.dataset.chapa = cliente.chapa || "";
-        option.dataset.marcaModelo = cliente.marca_modelo || "";
-        option.dataset.ruc = cliente.ruc || "";
-        option.dataset.nombre = cliente.nombre || "";
-        option.dataset.telefono = cliente.telefono || "";
-        option.dataset.direccion = cliente.direccion || "";
-        option.dataset.email = cliente.email || "";
-        option.dataset.grupoClienteId = cliente.grupo_cliente_id || "";
-        clientSelect.appendChild(option);
-      });
-      if (currentValue && Array.from(clientSelect.options).some((option) => option.value === String(currentValue))) {
-        clientSelect.value = String(currentValue);
-      }
-      clientOptions = Array.from(clientSelect.options).map((option) => ({
-        option,
-        text: `${option.textContent || ""} ${option.dataset.search || ""}`.toLowerCase(),
-        chapa: (option.dataset.chapa || "").trim().toUpperCase(),
-        value: option.value
-      }));
-    }
-
-    rebuildClientOptions(Array.from(clientSelect.options)
-      .filter((option) => option.value)
-      .map((option) => ({
-        id: option.value,
-        chapa: option.dataset.chapa || "",
-        marca_modelo: option.dataset.marcaModelo || "",
-        ruc: option.dataset.ruc || "",
-        nombre: option.dataset.nombre || "",
-        telefono: option.dataset.telefono || "",
-        direccion: option.dataset.direccion || "",
-        email: option.dataset.email || "",
-        grupo_cliente_id: option.dataset.grupoClienteId || "",
-        grupo_nombre: option.dataset.grupoNombre || ""
-      })));
-
-    function fillQuickClient(option) {
-      if (!option) return;
-      quickFields.chapa.value = option.dataset.chapa || "";
-      quickFields.marcaModelo.value = option.dataset.marcaModelo || "";
-      quickFields.ruc.value = option.dataset.ruc || "";
-      quickFields.nombre.value = option.dataset.nombre || "";
-      quickFields.telefono.value = option.dataset.telefono || "";
-      quickFields.direccion.value = option.dataset.direccion || "";
-      if (quickFields.email) quickFields.email.value = option.dataset.email || "";
-      quickFields.grupo.value = option.dataset.grupoClienteId || "";
-    }
-
-    const syncClientMode = () => {
-      const creating = !clientSelect.value;
-      quickClient.classList.toggle("is-hidden", !creating);
+    function syncClientMode(keepVisible = false) {
+      const creating = !clientIdInput.value;
+      quickClient.classList.toggle("is-hidden", !creating && !keepVisible);
       quickClient.querySelectorAll("input[name='nueva_chapa'], input[name='nuevo_marca_modelo']").forEach((input) => {
         input.required = creating;
       });
-    };
-    clientSelect.addEventListener("change", syncClientMode);
+    }
 
-    function chooseClient(option) {
-      if (!option) return;
-      fillQuickClient(option);
-      clientSelect.value = option.value;
-      clientSelect.dispatchEvent(new Event("change"));
-      if (clientSearch) clientSearch.value = option.textContent.trim();
+    function chooseClient(cliente) {
+      if (!cliente) return;
+      clientIdInput.value = cliente.id || "";
+      clientIdInput.dispatchEvent(new Event("input", { bubbles: true }));
+      if (clientSearch) {
+        clientSearch.value = optionText(cliente);
+        clientSearch.dataset.clientChapa = cliente.chapa || "";
+        clientSearch.dataset.clientNombre = cliente.nombre || "";
+      }
       if (clientResults) clientResults.classList.add("is-hidden");
+      syncClientMode();
     }
 
     function renderClientResults(matches, term) {
@@ -248,8 +304,8 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "client-result";
-        button.textContent = item.option.textContent.trim();
-        button.addEventListener("click", () => chooseClient(item.option));
+        button.textContent = optionText(item);
+        button.addEventListener("click", () => chooseClient(item));
         clientResults.appendChild(button);
       });
       clientResults.classList.remove("is-hidden");
@@ -259,6 +315,12 @@
       let searchTimer = null;
       clientSearch.addEventListener("input", () => {
         clearTimeout(searchTimer);
+        clientIdInput.value = "";
+        clearDetectedClientFields();
+        setDetectedClientReadonly(false);
+        delete clientSearch.dataset.clientChapa;
+        delete clientSearch.dataset.clientNombre;
+        syncClientMode();
         searchTimer = setTimeout(async () => {
           const term = clientSearch.value.trim();
           try {
@@ -267,16 +329,11 @@
             });
             if (!response.ok) throw new Error("No se pudo buscar clientes.");
             const data = await response.json();
-            rebuildClientOptions(data.clientes || []);
-            const matchedItems = clientOptions.filter((item) => item.value);
+            clientOptions = data.clientes || [];
+            const matchedItems = clientOptions;
             renderClientResults(matchedItems, term.toLowerCase());
             if (term && matchedItems.length === 1) {
-              clientSelect.value = matchedItems[0].value;
-              clientSelect.dispatchEvent(new Event("change"));
-            }
-            if (!term && !clientSelect.value) {
-              clientSelect.value = "";
-              clientSelect.dispatchEvent(new Event("change"));
+              chooseClient(matchedItems[0]);
             }
           } catch (error) {
             renderClientResults([], term.toLowerCase());
@@ -288,9 +345,9 @@
       quickFields.chapa.addEventListener("change", () => {
         const chapa = quickFields.chapa.value.trim().toUpperCase();
         if (!chapa) return;
-        const match = clientOptions.find((item) => item.value && item.chapa === chapa);
+        const match = clientOptions.find((item) => String(item.chapa || "").trim().toUpperCase() === chapa);
         if (!match) return;
-        chooseClient(match.option);
+        chooseClient(match);
       });
     }
     syncClientMode();
@@ -335,6 +392,59 @@
 
     input.addEventListener("input", updateCrudSearch);
     updateCrudSearch();
+  });
+
+  document.querySelectorAll("[data-wash-table]").forEach((table) => {
+    const input = table.closest("section")?.querySelector("[data-wash-search]");
+    const rows = Array.from(table.querySelectorAll("[data-wash-row]"));
+    const noResults = table.querySelector("[data-wash-no-results]");
+    const serverEmpty = table.querySelector("[data-wash-server-empty]");
+    if (!input || !rows.length) return;
+
+    const searchableRows = rows.map((row) => ({
+      row,
+      vehicle: normalizeSearchText(row.dataset.washVehicle || "")
+    }));
+
+    function updateWashSearch() {
+      const term = normalizeSearchText(input.value);
+      let visible = 0;
+      searchableRows.forEach((item) => {
+        const match = !term || item.vehicle.includes(term);
+        item.row.classList.toggle("is-hidden", !match);
+        if (match) visible += 1;
+      });
+      if (noResults) noResults.classList.toggle("is-hidden", visible !== 0 || Boolean(serverEmpty));
+    }
+
+    input.addEventListener("input", updateWashSearch);
+    updateWashSearch();
+  });
+
+  document.querySelectorAll("[data-dashboard-wash-list]").forEach((list) => {
+    const input = document.querySelector("[data-dashboard-wash-search]");
+    const rows = Array.from(list.querySelectorAll("[data-dashboard-wash-row]"));
+    const noResults = list.querySelector("[data-dashboard-wash-no-results]");
+    if (!input || !rows.length) return;
+
+    const searchableRows = rows.map((row) => ({
+      row,
+      vehicle: normalizeSearchText(row.dataset.washVehicle || "")
+    }));
+
+    function updateDashboardWashSearch() {
+      const term = normalizeSearchText(input.value);
+      let visible = 0;
+      searchableRows.forEach((item) => {
+        const match = !term || item.vehicle.includes(term);
+        item.row.classList.toggle("is-hidden", !match);
+        if (match) visible += 1;
+      });
+      if (noResults) noResults.classList.toggle("is-hidden", visible !== 0);
+    }
+
+    input.addEventListener("input", updateDashboardWashSearch);
+    updateDashboardWashSearch();
   });
 
   const roleSelectionRows = Array.from(document.querySelectorAll(".role-select-row[data-role-id]"));
@@ -396,6 +506,12 @@
   const relatedPanels = Array.from(document.querySelectorAll("[data-related-panel]"));
   const relatedEmpty = document.querySelector("[data-related-empty]");
   const tabButtons = Array.from(document.querySelectorAll("[data-tab-button]"));
+  document.querySelectorAll("[data-analysis-client-row]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("a, button, form, input, label")) return;
+      window.location.href = row.dataset.clientUrl;
+    });
+  });
   function showTab(tabId) {
     const panelScope = document.querySelector(`[data-tab-panel="${tabId}"]`)?.closest("[data-related-panel]");
     if (!panelScope) return;
@@ -936,12 +1052,12 @@
     }
 
     function selectedClient() {
-      const select = newWashForm.querySelector("[data-client-select]");
-      const option = select?.options[select.selectedIndex];
-      if (option?.value) {
+      const clientId = newWashForm.querySelector("[data-client-id]")?.value;
+      const clientSearch = newWashForm.querySelector("[data-client-search]");
+      if (clientId) {
         return {
-          auto: [option.dataset.chapa, option.dataset.marcaModelo].filter(Boolean).join(" - "),
-          client: option.dataset.nombre || option.textContent.trim()
+          auto: clientSearch?.dataset.clientChapa || clientSearch?.value || "",
+          client: clientSearch?.dataset.clientNombre || clientSearch?.value || "Sin nombre"
         };
       }
       return {
@@ -984,6 +1100,161 @@
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !newWashModal.classList.contains("is-hidden")) closeNewWashModal();
+    });
+  }
+
+  const editWashForm = document.querySelector("[data-edit-wash-form]");
+  const creditModal = document.querySelector("[data-credit-modal]");
+  if (editWashForm && creditModal) {
+    const creditModalTitle = creditModal.querySelector("[data-credit-modal-title]");
+    const creditModalSubtitle = creditModal.querySelector("[data-credit-modal-subtitle]");
+    const creditModalMessage = creditModal.querySelector("[data-credit-modal-message]");
+    const creditModalClient = creditModal.querySelector("[data-credit-client]");
+    const creditModalRuc = creditModal.querySelector("[data-credit-ruc]");
+    const creditModalGroupLabel = creditModal.querySelector("[data-credit-group-label]");
+    const creditModalGroup = creditModal.querySelector("[data-credit-group]");
+    const creditModalTotal = creditModal.querySelector("[data-credit-total]");
+    const creditModalFacts = creditModal.querySelector(".credit-modal-facts");
+    const creditModalMessageBox = creditModal.querySelector("[data-credit-modal-message]");
+    const creditModalActions = creditModal.querySelector("[data-credit-modal-actions]");
+    const creditValidationAlert = creditModal.querySelector("[data-credit-validation-alert]");
+    const creditValidationMessage = creditModal.querySelector("[data-credit-validation-message]");
+    const creditValidationAccept = creditModal.querySelector("[data-credit-validation-accept]");
+    const creditModalConfirm = creditModal.querySelector("[data-credit-modal-confirm]");
+    const creditModalCancel = creditModal.querySelectorAll("[data-credit-modal-cancel]");
+    const state = { step: "credit", submitter: null, allowSubmit: false, validationTarget: null };
+
+    function populateCreditModal() {
+      const clientName = editWashForm.querySelector("[name='cliente_nombre']")?.value.trim();
+      const ruc = editWashForm.querySelector("[name='cliente_ruc']")?.value.trim();
+      const groupSelect = editWashForm.querySelector("[name='fk_idgrupo_cliente']");
+      const selectedGroup = groupSelect?.options[groupSelect.selectedIndex]?.textContent.trim();
+      const total = editWashForm.querySelector("[data-total]")?.textContent.trim();
+      creditModalClient.textContent = clientName || "Sin nombre";
+      creditModalRuc.textContent = ruc || "Sin RUC";
+      creditModalGroup.textContent = groupSelect?.value ? selectedGroup : "Sin grupo";
+      creditModalTotal.textContent = total || "Gs. 0";
+    }
+
+    function openCreditModal(step) {
+      state.step = step;
+      creditValidationAlert.classList.add("is-hidden");
+      creditModalFacts.classList.remove("is-hidden");
+      creditModalMessageBox.classList.remove("is-hidden");
+      creditModalActions.classList.remove("is-hidden");
+      populateCreditModal();
+      const hasGroup = Boolean(editWashForm.querySelector("[name='fk_idgrupo_cliente']")?.value);
+      if (step === "group") {
+        creditModalGroupLabel.textContent = "Nombre / razón social";
+        creditModalTitle.textContent = "Crear grupo de crédito";
+        creditModalSubtitle.textContent = "Se creará un grupo con los datos actuales del cliente.";
+        creditModalMessage.textContent = "¿Querés crear automáticamente el grupo y continuar con el crédito?";
+        creditModalConfirm.textContent = "Crear grupo y continuar";
+        creditModalGroup.textContent = "Nuevo grupo: " + (creditModalClient.textContent || "Sin nombre");
+      } else {
+        creditModalGroupLabel.textContent = "Grupo cliente";
+        creditModalTitle.textContent = "Pasar lavado a crédito";
+        creditModalSubtitle.textContent = "Verifique los datos antes de continuar.";
+        creditModalMessage.textContent = hasGroup
+          ? "El lavado quedará asociado a un crédito por grupo."
+          : "El lavado quedará asociado a un crédito por grupo y luego podrá crear el grupo automáticamente.";
+        creditModalConfirm.textContent = "Continuar";
+      }
+      creditModal.classList.remove("is-hidden");
+      creditModalConfirm.focus();
+    }
+
+    function showValidationAlert(message, target) {
+      state.validationTarget = target;
+      creditModalTitle.textContent = "Datos incompletos";
+      creditModalSubtitle.textContent = "Complete el dato indicado para continuar.";
+      creditModalFacts.classList.add("is-hidden");
+      creditModalMessageBox.classList.add("is-hidden");
+      creditModalActions.classList.add("is-hidden");
+      creditValidationMessage.textContent = message;
+      creditValidationAlert.classList.remove("is-hidden");
+      creditModal.classList.remove("is-hidden");
+      creditValidationAccept.focus();
+    }
+
+    function validateCreditFields() {
+      const rucInput = editWashForm.querySelector("[name='cliente_ruc']");
+      const nombreInput = editWashForm.querySelector("[name='cliente_nombre']");
+      const groupSelect = editWashForm.querySelector("[name='fk_idgrupo_cliente']");
+      const validationMessage = "Para pasar a crédito, el RUC y el nombre del cliente deben tener al menos 3 caracteres.";
+      if ((rucInput?.value.trim().length || 0) < 3) return { message: validationMessage, target: rucInput };
+      if ((nombreInput?.value.trim().length || 0) < 3) return { message: validationMessage, target: nombreInput };
+      if (groupSelect && !groupSelect.value) {
+        return { message: "Para pasar a crédito, el cliente debe estar asociado a un grupo cliente.", target: groupSelect };
+      }
+      return null;
+    }
+
+    function closeCreditModal() {
+      creditModal.classList.add("is-hidden");
+      state.step = "credit";
+      state.submitter = null;
+      state.validationTarget = null;
+    }
+
+    function submitCreditForm(createGroup) {
+      creditModal.classList.add("is-hidden");
+      if (createGroup) {
+        editWashForm.querySelectorAll("[data-auto-group-flag]").forEach((field) => field.remove());
+        const field = document.createElement("input");
+        field.type = "hidden";
+        field.name = "crear_grupo_automatico";
+        field.value = "1";
+        field.dataset.autoGroupFlag = "true";
+        editWashForm.appendChild(field);
+      }
+      state.allowSubmit = true;
+      editWashForm.requestSubmit(state.submitter);
+    }
+
+    editWashForm.addEventListener("submit", (event) => {
+      if (event.submitter?.dataset.passCredit === undefined) return;
+      if (state.allowSubmit) {
+        state.allowSubmit = false;
+        return;
+      }
+      event.preventDefault();
+      state.submitter = event.submitter;
+      const validation = validateCreditFields();
+      if (validation) {
+        showValidationAlert(validation.message, validation.target);
+        return;
+      }
+      openCreditModal("credit");
+    });
+
+    creditValidationAccept.addEventListener("click", () => {
+      const target = state.validationTarget;
+      closeCreditModal();
+      if (target) {
+        target.focus({ preventScroll: true });
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    });
+
+    creditModalConfirm.addEventListener("click", () => {
+      if (state.step === "credit") {
+        const groupSelect = editWashForm.querySelector("[name='fk_idgrupo_cliente']");
+        if (groupSelect && !groupSelect.value) {
+          openCreditModal("group");
+          return;
+        }
+        submitCreditForm(false);
+        return;
+      }
+      submitCreditForm(true);
+    });
+    creditModalCancel.forEach((button) => button.addEventListener("click", closeCreditModal));
+    creditModal.addEventListener("click", (event) => {
+      if (event.target === creditModal) closeCreditModal();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !creditModal.classList.contains("is-hidden")) closeCreditModal();
     });
   }
 
@@ -1031,6 +1302,37 @@
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !paymentModal.classList.contains("is-hidden")) closePaymentModal();
+    });
+  }
+
+  const anularForm = document.querySelector("[data-anular-form]");
+  const anularModal = document.querySelector("[data-anular-modal]");
+  if (anularForm && anularModal) {
+    const anularConfirm = anularModal.querySelector("[data-anular-modal-confirm]");
+    const anularCancel = anularModal.querySelectorAll("[data-anular-modal-cancel]");
+    let pendingAnularForm = null;
+
+    function closeAnularModal() {
+      anularModal.classList.add("is-hidden");
+      pendingAnularForm = null;
+    }
+
+    anularForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      pendingAnularForm = anularForm;
+      anularModal.classList.remove("is-hidden");
+      anularConfirm.focus();
+    });
+
+    anularConfirm.addEventListener("click", () => {
+      if (pendingAnularForm) pendingAnularForm.submit();
+    });
+    anularCancel.forEach((button) => button.addEventListener("click", closeAnularModal));
+    anularModal.addEventListener("click", (event) => {
+      if (event.target === anularModal) closeAnularModal();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !anularModal.classList.contains("is-hidden")) closeAnularModal();
     });
   }
 

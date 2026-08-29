@@ -1,0 +1,52 @@
+<%- include('partials/header') %>
+<% const hasData = metrics.cantidad > 0; %>
+<% const filterQuery = `fecha_inicio=${encodeURIComponent(fechaInicio)}&fecha_fin=${encodeURIComponent(fechaFin)}&agrupacion=${encodeURIComponent(agrupacion)}&descripcion=${encodeURIComponent(descripcionFiltro)}&fk_idgasto_tipo=${encodeURIComponent(selectedGastoTipoId || 'todos')}&fk_idforma_pago=${encodeURIComponent(selectedFormaPagoId || 'todos')}&estado=${encodeURIComponent(estado)}`; %>
+<% const safeJson = JSON.stringify(chartData || {}).replace(/</g, '\\u003c'); %>
+<div class="page-head">
+  <div>
+    <h1>Análisis de gastos</h1>
+    <p>Resumen de egresos, montos y distribución por período</p>
+  </div>
+</div>
+
+<section class="grid one">
+  <form class="toolbar analysis-filter" method="get" action="/analisis-gastos">
+    <label>Fecha desde<input type="date" name="fecha_inicio" value="<%= fechaInicio %>"></label>
+    <label>Fecha hasta<input type="date" name="fecha_fin" value="<%= fechaFin %>"></label>
+    <label>Agrupar por<select name="agrupacion"><option value="mes" <%= agrupacion === 'mes' ? 'selected' : '' %>>Mes</option><option value="dia" <%= agrupacion === 'dia' ? 'selected' : '' %>>Día</option></select></label>
+    <label>Descripción<input type="search" name="descripcion" value="<%= descripcionFiltro %>" placeholder="Buscar descripción"></label>
+    <label>Tipo de gasto<select name="fk_idgasto_tipo"><option value="todos" <%= !selectedGastoTipoId ? 'selected' : '' %>>Todos</option><% tipos.forEach((item) => { %><option value="<%= item.id %>" <%= selectedGastoTipoId === Number(item.id) ? 'selected' : '' %>><%= item.nombre %></option><% }) %></select></label>
+    <label>Forma de pago<select name="fk_idforma_pago"><option value="todos" <%= !selectedFormaPagoId ? 'selected' : '' %>>Todas</option><% formasPago.forEach((item) => { %><option value="<%= item.idforma_pago %>" <%= selectedFormaPagoId === Number(item.idforma_pago) ? 'selected' : '' %>><%= item.nombre %></option><% }) %></select></label>
+    <label>Estado<select name="estado"><option value="VIGENTES" <%= estado === 'VIGENTES' ? 'selected' : '' %>>Vigentes</option><option value="TODOS" <%= estado === 'TODOS' ? 'selected' : '' %>>Todos</option><option value="ANULADOS" <%= estado === 'ANULADOS' ? 'selected' : '' %>>Anulados</option></select></label>
+    <button type="submit">Ver</button>
+    <a class="button secondary" href="/analisis-gastos">Limpiar</a>
+  </form>
+</section>
+
+<section class="metrics analysis-metrics">
+  <article><span>Gastos</span><strong><%= metrics.cantidad %></strong></article>
+  <article><span>Monto total</span><strong><%= formatMoney(metrics.total) %></strong></article>
+  <article><span>Monto promedio</span><strong><%= formatMoney(metrics.promedio) %></strong></article>
+  <article><span>Gasto máximo</span><strong><%= formatMoney(metrics.maximo) %></strong></article>
+  <article><span>Anulados en rango</span><strong><%= metrics.anulados %></strong></article>
+</section>
+
+<% if (!hasData) { %><div class="flash">No existen gastos con los filtros seleccionados.</div><% } %>
+
+<section class="analysis-dashboard-grid">
+  <div class="panel chart-panel chart-panel-wide"><h2>Gastos por período</h2><div class="chart-box"><canvas data-expense-chart="period"></canvas></div></div>
+  <div class="panel chart-panel"><h2>Tipos de gasto más usados</h2><div class="chart-box"><canvas data-expense-chart="types-count"></canvas></div></div>
+  <div class="panel chart-panel"><h2>Monto por tipo de gasto</h2><div class="chart-box"><canvas data-expense-chart="types-total"></canvas></div></div>
+  <div class="panel chart-panel"><h2>Gastos por forma de pago</h2><div class="chart-box"><canvas data-expense-chart="payments"></canvas></div></div>
+</section>
+
+<section class="grid two analysis-tables">
+  <div><h2>Resumen por tipo de gasto</h2><div class="table-wrap"><table><thead><tr><th>Tipo</th><th class="money-cell">Cantidad</th><th class="money-cell">Total</th></tr></thead><tbody><% types.forEach((item) => { %><tr><td><%= item.nombre %></td><td class="money-cell"><%= item.cantidad %></td><td class="money-cell"><%= formatMoney(item.total) %></td></tr><% }) %><% if (!types.length) { %><tr><td colspan="3">Sin movimientos.</td></tr><% } %></tbody></table></div></div>
+  <div><h2>Resumen por forma de pago</h2><div class="table-wrap"><table><thead><tr><th>Forma</th><th class="money-cell">Cantidad</th><th class="money-cell">Total</th></tr></thead><tbody><% payments.forEach((item) => { %><tr><td><%= item.nombre %></td><td class="money-cell"><%= item.cantidad %></td><td class="money-cell"><%= formatMoney(item.total) %></td></tr><% }) %><% if (!payments.length) { %><tr><td colspan="3">Sin movimientos.</td></tr><% } %></tbody></table></div></div>
+  <div><h2>Resumen por período</h2><div class="table-wrap"><table><thead><tr><th>Período</th><th class="money-cell">Cantidad</th><th class="money-cell">Total</th></tr></thead><tbody><% period.forEach((item) => { %><tr><td><%= item.periodo_label || formatDate(item.periodo) %></td><td class="money-cell"><%= item.cantidad %></td><td class="money-cell"><%= formatMoney(item.total) %></td></tr><% }) %><% if (!period.length) { %><tr><td colspan="3">Sin movimientos.</td></tr><% } %></tbody></table></div></div>
+</section>
+
+<script id="analysis-gastos-data" type="application/json"><%- safeJson %></script>
+<script src="/vendor/chart.js/chart.umd.js"></script>
+<script src="/js/analisis_gastos.js"></script>
+<%- include('partials/footer') %>

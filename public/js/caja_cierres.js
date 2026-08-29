@@ -1,4 +1,11 @@
 (function () {
+  document.querySelectorAll("[data-confirm-action]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      const message = form.dataset.confirmAction;
+      if (message && !window.confirm(message)) event.preventDefault();
+    });
+  });
+
   const form = document.querySelector("[data-caja-cierre-form]");
   if (!form) return;
 

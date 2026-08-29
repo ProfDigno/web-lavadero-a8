@@ -1,7 +1,7 @@
 <%- include('partials/header') %>
-<% const modalCrud = ['clientes', 'servicios', 'servicio-grupos', 'personal', 'grupo-clientes', 'formas-pago', 'gasto-tipos'].includes(pathName); %>
-<% const entityLabel = pathName === 'clientes' ? 'cliente' : (pathName === 'servicios' ? 'servicio' : (pathName === 'servicio-grupos' ? 'grupo de servicio' : (pathName === 'personal' ? 'personal' : (pathName === 'grupo-clientes' ? 'grupo de cliente' : (pathName === 'formas-pago' ? 'forma de pago' : (pathName === 'gasto-tipos' ? 'tipo de gasto' : 'registro')))))); %>
-<% const newEntityLabel = pathName === 'formas-pago' ? 'Nueva forma de pago' : 'Nuevo ' + entityLabel; %>
+<% const modalCrud = ['clientes', 'servicios', 'servicio-grupos', 'personal', 'grupo-clientes', 'formas-pago', 'gasto-tipos', 'producto-categorias', 'productos'].includes(pathName); %>
+<% const entityLabel = pathName === 'clientes' ? 'cliente' : (pathName === 'servicios' ? 'servicio' : (pathName === 'servicio-grupos' ? 'grupo de servicio' : (pathName === 'personal' ? 'personal' : (pathName === 'grupo-clientes' ? 'grupo de cliente' : (pathName === 'formas-pago' ? 'forma de pago' : (pathName === 'gasto-tipos' ? 'tipo de gasto' : (pathName === 'producto-categorias' ? 'categoria de producto' : (pathName === 'productos' ? 'producto' : 'registro')))))))); %>
+<% const newEntityLabel = pathName === 'formas-pago' ? 'Nueva forma de pago' : (pathName === 'producto-categorias' ? 'Nueva categoria' : 'Nuevo ' + entityLabel); %>
 <% const serviceModule = ['servicios', 'servicio-grupos'].includes(pathName); %>
 <% const canMutate = !serviceModule || canEvent('servicio-ocultar'); %>
 <% const tableFields = pathName === 'clientes'
@@ -10,6 +10,10 @@
     ? ['nombre', 'razon_social', 'ruc', 'telefono', 'es_credito'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
   : pathName === 'formas-pago'
     ? ['nombre', 'icono_ruta', 'color', 'mostrar_despues_crear'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
+  : pathName === 'productos'
+    ? ['codigo', 'nombre', 'fk_idproducto_categoria', 'precio_venta', 'stock_actual'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
+  : pathName === 'producto-categorias'
+    ? ['nombre', 'descripcion'].map((name) => fields.find((field) => field.name === name)).filter(Boolean)
   : fields.slice(0, 3); %>
 <% const tableColspan = tableFields.length + (modalCrud ? 2 : 3); %>
 <% const meta = listMeta || { q: '', limit: null, offset: 0, total: items.length, isPaged: false }; %>
@@ -47,8 +51,8 @@
       <% } else if (field.type === 'select') { %>
         <label>
           <%= field.label %>
-          <select name="<%= field.name %>">
-            <option value="">Sin grupo</option>
+          <select name="<%= field.name %>" <%= field.required ? 'required' : '' %>>
+            <% if (field.allowEmpty !== false) { %><option value="">Sin grupo</option><% } %>
             <% (optionsByField[field.name] || []).forEach((option) => { %>
               <option
                 value="<%= option.id %>"
@@ -90,10 +94,11 @@
           <%= field.label %>
             <input
             name="<%= field.name %>"
-            type="<%= field.type === 'color' ? 'color' : (field.type === 'email' ? 'email' : 'text') %>"
+            type="<%= field.type === 'color' ? 'color' : (field.type === 'email' ? 'email' : (field.type === 'integer' ? 'number' : 'text')) %>"
             class="<%= field.type === 'money' ? 'money-input' : '' %>"
             value="<%= editItem && editItem[field.name] != null ? (field.type === 'money' ? formatMoney(editItem[field.name]) : editItem[field.name]) : '' %>"
             <%= field.type === 'money' ? 'inputmode="numeric" data-money-input' : '' %>
+            <%= field.type === 'integer' ? 'inputmode="numeric" min="0" step="1"' : '' %>
             <%= field.uppercase ? 'data-uppercase' : '' %>
             <%= field.required ? 'required' : '' %>>
         </label>
@@ -148,10 +153,10 @@
             return item[field.name] == null ? '' : item[field.name];
           })).join(' '); %>
           <tr
-            class="<%= modalCrud && !item.activo ? 'row-inactive' : '' %> <%= ['grupo-clientes', 'servicio-grupos', 'personal', 'clientes'].includes(pathName) ? 'selectable-row' : '' %>"
+            class="<%= modalCrud && !item.activo ? 'row-inactive' : '' %> <%= ['grupo-clientes', 'servicio-grupos', 'personal', 'clientes', 'producto-categorias'].includes(pathName) ? 'selectable-row' : '' %>"
             data-crud-row
             data-search="<%= itemSearchText %>"
-            <%- ['grupo-clientes', 'servicio-grupos', 'personal', 'clientes'].includes(pathName) ? `data-related-group-row="${item.id}"` : '' %>>
+            <%- ['grupo-clientes', 'servicio-grupos', 'personal', 'clientes', 'producto-categorias'].includes(pathName) ? `data-related-group-row="${item.id}"` : '' %>>
             <td><%= item.id %></td>
             <% tableFields.forEach((field) => { %>
               <td class="<%= field.type === 'money' ? 'money-cell' : '' %>">
@@ -379,6 +384,55 @@
       </section>
     <% }) %>
   <% } %>
+  <% if (pathName === 'producto-categorias') { %>
+    <div class="related-clients-panel is-hidden" data-related-empty>
+      Seleccione una categoria para ver sus productos relacionados.
+    </div>
+    <% items.forEach((category) => { %>
+      <% const relatedProducts = (relatedProductsByCategory && relatedProductsByCategory[String(category.id)]) || []; %>
+      <section class="related-clients-panel is-hidden" data-related-panel="<%= category.id %>">
+        <div class="section-title compact-title">
+          <div>
+            <h2>Productos de <%= category.nombre %></h2>
+            <p><%= relatedProducts.length %> <%= relatedProducts.length === 1 ? 'producto relacionado' : 'productos relacionados' %></p>
+          </div>
+        </div>
+        <div class="table-wrap related-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Codigo</th>
+                <th>Nombre</th>
+                <th>Descripcion</th>
+                <th class="money-cell">Precio venta</th>
+                <th class="money-cell">Stock</th>
+                <th class="money-cell">Stock minimo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% relatedProducts.forEach((product) => { %>
+                <tr class="<%= product.activo ? '' : 'row-inactive' %>">
+                  <td><%= product.id %></td>
+                  <td><%= product.codigo || '' %></td>
+                  <td><strong><%= product.nombre || '' %></strong></td>
+                  <td><%= product.descripcion || '' %></td>
+                  <td class="money-cell"><%= formatMoney(product.precio_venta) %></td>
+                  <td class="money-cell"><%= product.stock_actual %></td>
+                  <td class="money-cell"><%= product.stock_minimo %></td>
+                  <td><%= product.activo ? 'Activo' : 'Inactivo' %></td>
+                </tr>
+              <% }) %>
+              <% if (!relatedProducts.length) { %>
+                <tr><td colspan="8">Sin productos relacionados.</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    <% }) %>
+  <% } %>
   <% if (pathName === 'personal') { %>
     <% const personalMeta = relatedPersonalMeta || { selectedId: '', activeTab: 'lavados', limit: 100 }; %>
     <div class="related-clients-panel is-hidden" data-related-empty>
@@ -425,7 +479,7 @@
                   <tr class="estado-<%= lavado.estado.toLowerCase() %>">
                     <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
                     <td><%= formatDateTime(lavado.fecha_creado) %></td>
-                    <td><strong><%= lavado.chapa %></strong><br><small><%= lavado.marca_modelo || '' %></small></td>
+                    <td><strong><%= formatLavadoVehicle(lavado) %></strong><br><small><%= lavado.marca_modelo || '' %></small></td>
                     <td><%= lavado.grupo_cliente_nombre || '' %></td>
                     <td><%- include('partials/payment_chip', { nombre: lavado.forma_pago, icono: lavado.forma_pago_icono, color: lavado.forma_pago_color }) %></td>
                     <td class="money-cell"><%= formatMoney(lavado.total) %></td>
@@ -506,8 +560,8 @@
         <% } else if (field.type === 'select') { %>
           <label>
             <%= field.label %>
-            <select name="<%= field.name %>">
-              <option value="">Sin grupo</option>
+          <select name="<%= field.name %>" <%= field.required ? 'required' : '' %>>
+              <% if (field.allowEmpty !== false) { %><option value="">Sin grupo</option><% } %>
               <% (optionsByField[field.name] || []).forEach((option) => { %>
                 <option
                   value="<%= option.id %>"
@@ -548,11 +602,12 @@
           <label>
             <%= field.label %>
             <input
-              name="<%= field.name %>"
-              type="<%= field.type === 'color' ? 'color' : (field.type === 'email' ? 'email' : 'text') %>"
-              class="<%= field.type === 'money' ? 'money-input' : '' %>"
-              value="<%= editItem && editItem[field.name] != null ? (field.type === 'money' ? formatMoney(editItem[field.name]) : editItem[field.name]) : '' %>"
-              <%= field.type === 'money' ? 'inputmode="numeric" data-money-input' : '' %>
+            name="<%= field.name %>"
+            type="<%= field.type === 'color' ? 'color' : (field.type === 'email' ? 'email' : (field.type === 'integer' ? 'number' : 'text')) %>"
+            class="<%= field.type === 'money' ? 'money-input' : '' %>"
+            value="<%= editItem && editItem[field.name] != null ? (field.type === 'money' ? formatMoney(editItem[field.name]) : editItem[field.name]) : '' %>"
+            <%= field.type === 'money' ? 'inputmode="numeric" data-money-input' : '' %>
+            <%= field.type === 'integer' ? 'inputmode="numeric" min="0" step="1"' : '' %>
               <%= field.uppercase ? 'data-uppercase' : '' %>
               <%= field.required ? 'required' : '' %>>
           </label>

@@ -13,63 +13,27 @@
 <section class="panel">
   <h2>Nuevo lavado</h2>
   <form method="post" action="/lavados" class="stack wash-form" data-new-wash-form>
-    <div class="grid one">
-      <label>
-        Buscar cliente existente
-        <input type="search" data-client-search name="cliente_busqueda" value="<%= formData.cliente_busqueda || '' %>" placeholder="Chapa, marca/modelo o nombre">
-      </label>
-      <div class="client-search-results is-hidden" data-client-results></div>
-      <label>
-        Cliente seleccionado
-        <select name="fk_idcliente" data-client-select>
-          <option value="">Crear cliente rapido</option>
-          <% clientes.forEach((cliente) => { %>
-            <option
-              value="<%= cliente.id %>"
-              data-search="<%= [cliente.chapa, cliente.marca_modelo, cliente.nombre, cliente.ruc, cliente.telefono].filter(Boolean).join(' ').toLowerCase() %>"
-              data-chapa="<%= cliente.chapa || '' %>"
-              data-marca-modelo="<%= cliente.marca_modelo || '' %>"
-              data-ruc="<%= cliente.ruc || '' %>"
-              data-nombre="<%= cliente.nombre || '' %>"
-              data-telefono="<%= cliente.telefono || '' %>"
-              data-direccion="<%= cliente.direccion || '' %>"
-              data-email="<%= cliente.email || '' %>"
-              data-grupo-cliente-id="<%= cliente.fk_idgrupo_cliente || '' %>"
-              data-grupo-nombre="<%= cliente.grupo_nombre || '' %>"
-              <%= String(formData.fk_idcliente || '') === String(cliente.id) ? 'selected' : '' %>>
-              <%= cliente.chapa %> - <%= cliente.marca_modelo %><%= cliente.nombre ? ' - ' + cliente.nombre : '' %><%= cliente.grupo_nombre ? ' (' + cliente.grupo_nombre + ')' : '' %>
-            </option>
-          <% }) %>
-        </select>
-      </label>
-      <div class="choice-group">
-        <span class="choice-label">Personal</span>
-        <% const selectedPersonalIds = Array.isArray(formData.fk_idpersonal) ? formData.fk_idpersonal.map(String) : (formData.fk_idpersonal ? [String(formData.fk_idpersonal)] : []); %>
-        <div data-personal-inputs>
-          <% selectedPersonalIds.forEach((personalId) => { %><input type="hidden" name="fk_idpersonal" value="<%= personalId %>"><% }) %>
-        </div>
-        <div class="choice-buttons" data-personal-buttons>
-          <% personal.forEach((persona) => { %>
-            <button type="button" class="choice-button <%= selectedPersonalIds.includes(String(persona.id)) ? 'is-selected' : '' %>" data-personal-id="<%= persona.id %>"><%= persona.nombre %></button>
-          <% }) %>
-        </div>
-      </div>
-    </div>
-
     <fieldset class="quick-client" data-quick-client>
       <legend>Cliente rapido</legend>
+      <div class="quick-client-actions">
+        <button type="button" class="secondary quick-client-toggle" data-quick-details-toggle aria-expanded="false" aria-controls="quick-client-details">
+          Mostrar datos adicionales
+        </button>
+      </div>
       <div class="grid two">
         <label>Chapa <input name="nueva_chapa" value="<%= formData.nueva_chapa || '' %>" autocomplete="off" data-uppercase></label>
         <label>Marca/modelo <input name="nuevo_marca_modelo" value="<%= formData.nuevo_marca_modelo || '' %>" data-uppercase></label>
-        <label>
-          RUC
-          <input name="nuevo_ruc" value="<%= formData.nuevo_ruc || '' %>" data-uppercase>
-          <small class="invoice-ruc-status" data-quick-ruc-status></small>
-        </label>
-        <label>Nombre <input name="nuevo_nombre" value="<%= formData.nuevo_nombre || '' %>" data-uppercase></label>
-        <label>Telefono <input name="nuevo_telefono" value="<%= formData.nuevo_telefono || '' %>" data-uppercase></label>
-        <label>Direccion <input name="nuevo_direccion" value="<%= formData.nuevo_direccion || '' %>" data-uppercase></label>
-        <label>Email <input name="nuevo_email" type="email" value="<%= formData.nuevo_email || '' %>"></label>
+        <div id="quick-client-details" class="quick-client-details grid two is-hidden" data-quick-details>
+          <label>
+            RUC
+            <input name="nuevo_ruc" value="<%= formData.nuevo_ruc || '' %>" data-uppercase>
+            <small class="invoice-ruc-status" data-quick-ruc-status></small>
+          </label>
+          <label>Nombre <input name="nuevo_nombre" value="<%= formData.nuevo_nombre || '' %>" data-uppercase></label>
+          <label>Telefono <input name="nuevo_telefono" value="<%= formData.nuevo_telefono || '' %>" data-uppercase></label>
+          <label>Direccion <input name="nuevo_direccion" value="<%= formData.nuevo_direccion || '' %>" data-uppercase></label>
+          <label>Email <input name="nuevo_email" type="email" value="<%= formData.nuevo_email || '' %>"></label>
+        </div>
         <label>
           Grupo cliente
           <select name="nuevo_grupo_cliente_id" data-group-prefill-select>
@@ -88,6 +52,27 @@
         </label>
       </div>
     </fieldset>
+
+    <div class="grid one">
+      <label>
+        Buscar cliente existente
+        <input type="search" data-client-search name="cliente_busqueda" value="<%= formData.cliente_busqueda || '' %>" placeholder="Chapa, marca/modelo o nombre">
+      </label>
+      <div class="client-search-results is-hidden" data-client-results></div>
+      <input type="hidden" name="fk_idcliente" value="<%= formData.fk_idcliente || '' %>" data-client-id>
+      <div class="choice-group">
+        <span class="choice-label">Personal</span>
+        <% const selectedPersonalIds = Array.isArray(formData.fk_idpersonal) ? formData.fk_idpersonal.map(String) : (formData.fk_idpersonal ? [String(formData.fk_idpersonal)] : []); %>
+        <div data-personal-inputs>
+          <% selectedPersonalIds.forEach((personalId) => { %><input type="hidden" name="fk_idpersonal" value="<%= personalId %>"><% }) %>
+        </div>
+        <div class="choice-buttons" data-personal-buttons>
+          <% personal.forEach((persona) => { %>
+            <button type="button" class="choice-button <%= selectedPersonalIds.includes(String(persona.id)) ? 'is-selected' : '' %>" data-personal-id="<%= persona.id %>"><%= persona.nombre %></button>
+          <% }) %>
+        </div>
+      </div>
+    </div>
 
     <div class="services-box">
       <div class="section-title">
@@ -179,23 +164,32 @@
         Fecha
         <input type="date" name="fecha" value="<%= fecha %>" onchange="this.form.submit()">
       </label>
+      <label>
+        Buscar vehículo
+        <input type="search" name="q" value="<%= searchTerm %>" placeholder="Chapa o marca/modelo" data-wash-search autocomplete="off">
+      </label>
       <button type="submit" class="secondary">Ver</button>
+      <% if (searchTerm) { %>
+        <a class="button secondary" href="/lavados?fecha=<%= encodeURIComponent(fecha) %>">Limpiar</a>
+      <% } %>
     </form>
   </div>
-  <div class="table-wrap">
+  <div class="table-wrap" data-wash-table>
     <table>
       <thead><tr><th>#</th><th>Auto</th><th>Personal</th><th>Pago</th></tr></thead>
-      <tbody>
+      <tbody data-wash-results>
         <% lavados.forEach((lavado) => { %>
           <tr
             class="wash-row wash-row-link estado-<%= lavado.estado.toLowerCase() %>"
             data-row-link="/lavados/<%= lavado.id %>"
+            data-wash-row
+            data-wash-vehicle="<%= [lavado.chapa, lavado.marca_modelo].filter(Boolean).join(' ') %>"
             tabindex="0"
             role="link">
             <td><a href="/lavados/<%= lavado.id %>">#<%= lavado.id %></a></td>
             <td class="wash-auto">
               <span class="wash-status-title estado-<%= lavado.estado.toLowerCase() %>"><%= lavado.estado %></span>
-              <strong><%= lavado.chapa %> (<%= formatTime(lavado.fecha_creado) %>)<%= Number(lavado.duplicado_emitido_dia || 0) > 1 && lavado.estado === 'EMITIDO' ? ' (DUPLICADO)' : '' %></strong>
+              <strong><%= formatLavadoVehicle(lavado) %> (<%= formatTime(lavado.fecha_creado) %>)<%= Number(lavado.duplicado_emitido_dia || 0) > 1 && lavado.estado === 'EMITIDO' ? ' (DUPLICADO)' : '' %></strong>
               <br><small><%= lavado.marca_modelo %></small>
             </td>
             <td class="wash-personal"><strong><%= lavado.personal_nombre %></strong><br><span class="wash-total"><%= formatMoney(lavado.total) %></span></td>
@@ -216,20 +210,21 @@
                             aria-label="Cambiar a <%= forma.nombre %>"
                             data-payment-confirm
                             data-lavado-id="#<%= lavado.id %>"
-                            data-auto="<%= lavado.chapa %> - <%= lavado.marca_modelo %>"
+                            data-auto="<%= formatLavadoVehicle(lavado) %> - <%= lavado.marca_modelo %>"
                             data-personal="<%= lavado.personal_nombre %>"
                             data-total="<%= formatMoney(lavado.total) %>"
                             data-pago-actual="<%= lavado.forma_pago %>"
                             data-pago-nuevo="<%= forma.nombre %>"
                             type="submit"
                             <%= Number(forma.id) === Number(lavado.fk_idforma_pago) ? 'disabled' : '' %>>
-                            <span>
+                            <span class="payment-button-icon">
                               <% if (forma.icono_ruta && String(forma.icono_ruta).startsWith('/uploads/')) { %>
                                 <img src="<%= forma.icono_ruta %>" alt="">
                               <% } else { %>
                                 <%= paymentIconLabel(forma.icono_ruta) %>
                               <% } %>
                             </span>
+                            <span class="payment-button-label"><%= String(forma.nombre || '').slice(0, 3).toUpperCase() %></span>
                           </button>
                         </form>
                       <% } %>
@@ -240,7 +235,8 @@
             </td>
           </tr>
         <% }) %>
-        <% if (!lavados.length) { %><tr><td colspan="4">Sin lavados.</td></tr><% } %>
+        <% if (!lavados.length) { %><tr data-wash-server-empty><td colspan="4"><%= searchTerm ? 'Sin lavados para la búsqueda seleccionada.' : 'Sin lavados.' %></td></tr><% } %>
+        <tr class="is-hidden" data-wash-no-results><td colspan="4">Sin lavados para la búsqueda seleccionada.</td></tr>
       </tbody>
     </table>
   </div>
