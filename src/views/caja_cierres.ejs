@@ -40,8 +40,8 @@
 <% } else if (isDetail) { %>
   <section class="metrics caja-cierre-metrics">
     <article><span>Estado</span><strong><%= detalle.estado %></strong></article>
-    <article><span>Ingresos</span><strong><%= formatMoney(detalle.total_ingresos) %></strong></article>
-    <article><span>Egresos</span><strong><%= formatMoney(detalle.total_egresos) %></strong></article>
+    <article class="caja-cierre-desglose-metric"><span>Ingresos</span><strong><%= formatMoney(detalle.total_ingresos) %></strong><%- include('partials/caja_cierre_desglose', { categorias: resumen.desglose.ingresos }) %></article>
+    <article class="caja-cierre-desglose-metric"><span>Egresos</span><strong><%= formatMoney(detalle.total_egresos) %></strong><%- include('partials/caja_cierre_desglose', { categorias: resumen.desglose.egresos }) %></article>
     <article><span>Neto</span><strong><%= formatMoney(detalle.total_neto) %></strong></article>
     <article><span>Efectivo esperado</span><strong><%= formatMoney(detalle.efectivo_esperado) %></strong></article>
     <article><span>Efectivo contado</span><strong><%= formatMoney(detalle.efectivo_contado) %></strong></article>
@@ -131,8 +131,8 @@
       </div>
       <div class="metrics compact caja-cierre-live-metrics">
         <article><span>Saldo inicial</span><strong><%= formatMoney(sesion.saldo_inicial_efectivo) %></strong></article>
-        <article><span>Ingresos</span><strong><%= formatMoney(resumen.ingresos) %></strong></article>
-        <article><span>Egresos</span><strong><%= formatMoney(resumen.egresos) %></strong></article>
+        <article><span>Ingresos</span><strong><%= formatMoney(resumen.ingresos) %></strong><%- include('partials/caja_cierre_desglose', { categorias: resumen.desglose.ingresos }) %></article>
+        <article><span>Egresos</span><strong><%= formatMoney(resumen.egresos) %></strong><%- include('partials/caja_cierre_desglose', { categorias: resumen.desglose.egresos }) %></article>
         <article><span>Efectivo esperado</span><strong data-expected-cash="<%= resumen.efectivoEsperado %>"><%= formatMoney(resumen.efectivoEsperado) %></strong></article>
         <article><span>Créditos pendientes</span><strong><%= formatMoney(totalCreditosPendientes) %></strong><small><%= cantidadCreditosPendientes %> lavado(s), fuera del cierre</small></article>
       </div>

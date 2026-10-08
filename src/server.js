@@ -22,6 +22,7 @@ const {
   getCajaSesionAbierta,
   getCajaSesiones,
   summarizeCajaMovimientos,
+  sincronizarLavadoEnCaja,
   sincronizarCajaSesionAbierta
 } = require("./caja-cierres");
 const { startTelegramBot } = require("./telegram-bot");
@@ -1867,7 +1868,7 @@ app.get("/caja-cierres/:id", requireAuth, requireCajaCierreAccess, async (req, r
       title: "Detalle de cierre",
       sesion: null,
       movimientos: [],
-      resumen: null,
+      resumen: summarizeCajaMovimientos(detalle.movimientos, detalle.saldo_inicial_efectivo),
       historial: [],
       detalle,
       creditosPendientes: detalle.creditos_pendientes,
@@ -3313,6 +3314,7 @@ app.post("/lavados/:id/editar", requireAuth, async (req, res, next) => {
       }
 
       await applyCommission(client, { ...lavado, total }, 1, creadoPor);
+      await sincronizarLavadoEnCaja(lavado.id, client);
     });
     setFlash(
       req,
@@ -3330,30 +3332,25 @@ app.post("/lavados/:id/editar", requireAuth, async (req, res, next) => {
 
 app.post("/lavados/:id/forma-pago", requireAuth, async (req, res, next) => {
   try {
-    const lavado = await query(`select estado from lavados where id = $1`, [req.params.id]);
-    if (!lavado.rows[0]) {
-      setFlash(req, "error", "Lavado no encontrado.");
-      return res.redirect(req.body.redirect_to || "/lavados");
-    }
-    if (lavado.rows[0].estado === "CREDITO") {
-      setFlash(req, "error", "Los lavados en credito no permiten cambiar la forma de pago.");
-      return res.redirect(req.body.redirect_to || `/lavados/${req.params.id}`);
-    }
-    const forma = await query(`select nombre from formas_pago where id = $1 and activo = true`, [req.body.fk_idforma_pago]);
-    if (!forma.rows[0]) {
-      setFlash(req, "error", "Forma de pago no encontrada.");
-      return res.redirect(req.body.redirect_to || `/lavados/${req.params.id}`);
-    }
-    await query(
-      `update lavados
-       set fk_idforma_pago = $1, estado = $2
-       where id = $3 and estado <> 'ANULADO' and estado <> 'CREDITO'`,
-      [req.body.fk_idforma_pago, estadoPorFormaPago(forma.rows[0].nombre), req.params.id]
-    );
+    await withTransaction(async (client) => {
+      const lavado = await client.query(`select estado from lavados where id = $1 for update`, [req.params.id]);
+      if (!lavado.rows[0]) throw new Error("Lavado no encontrado.");
+      if (lavado.rows[0].estado === "CREDITO") throw new Error("Los lavados en credito no permiten cambiar la forma de pago.");
+      const forma = await client.query(`select nombre from formas_pago where id = $1 and activo = true`, [req.body.fk_idforma_pago]);
+      if (!forma.rows[0]) throw new Error("Forma de pago no encontrada.");
+      await client.query(
+        `update lavados
+         set fk_idforma_pago = $1, estado = $2
+         where id = $3 and estado <> 'ANULADO' and estado <> 'CREDITO'`,
+        [req.body.fk_idforma_pago, estadoPorFormaPago(forma.rows[0].nombre), req.params.id]
+      );
+      await sincronizarLavadoEnCaja(req.params.id, client);
+    });
     setFlash(req, "success", "Forma de pago actualizada.");
     res.redirect(req.body.redirect_to && req.body.redirect_to.startsWith("/") ? req.body.redirect_to : `/lavados/${req.params.id}`);
   } catch (error) {
-    next(error);
+    setFlash(req, "error", userErrorMessage(error));
+    res.redirect(req.body.redirect_to && req.body.redirect_to.startsWith("/") ? req.body.redirect_to : `/lavados/${req.params.id}`);
   }
 });
 
@@ -3381,6 +3378,7 @@ app.post("/lavados/:id/anular", requireAuth, async (req, res, next) => {
       );
       await applyCommission(client, lavado, -1, creadoPor);
       await client.query(`update lavado_personal set comision = 0 where fk_idlavado = $1`, [req.params.id]);
+      await sincronizarLavadoEnCaja(req.params.id, client);
     });
     setFlash(req, "success", "Lavado anulado y comision descontada.");
     res.redirect(`/lavados/${req.params.id}`);

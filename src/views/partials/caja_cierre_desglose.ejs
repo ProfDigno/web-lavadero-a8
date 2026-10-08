@@ -1,0 +1,5 @@
+<ul class="caja-cierre-desglose">
+  <% categorias.forEach((categoria) => { %>
+    <li><span><%= categoria.nombre %></span><b><%= formatMoney(categoria.monto) %></b></li>
+  <% }) %>
+</ul>

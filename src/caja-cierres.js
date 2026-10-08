@@ -43,6 +43,18 @@ function normalizeDenominations(denominations) {
 }
 
 function summarizeCajaMovimientos(movimientos, saldoInicialEfectivo = 0) {
+  const desglose = {
+    ingresos: [
+      { origen: "LAVADO", nombre: "Lavados", monto: 0 },
+      { origen: "CREDITO", nombre: "Cobros de créditos", monto: 0 },
+      { origen: "VENTA", nombre: "Ventas", monto: 0 }
+    ],
+    egresos: [
+      { origen: "GASTO", nombre: "Gastos", monto: 0 },
+      { origen: "VALE", nombre: "Vales", monto: 0 },
+      { origen: "VENTA", nombre: "Reversiones de ventas", monto: 0 }
+    ]
+  };
   const resumen = {
     ingresos: 0,
     egresos: 0,
@@ -50,7 +62,8 @@ function summarizeCajaMovimientos(movimientos, saldoInicialEfectivo = 0) {
     efectivoIngresos: 0,
     efectivoEgresos: 0,
     efectivoEsperado: money(saldoInicialEfectivo),
-    formas: []
+    formas: [],
+    desglose
   };
   const formas = new Map();
 
@@ -59,6 +72,16 @@ function summarizeCajaMovimientos(movimientos, saldoInicialEfectivo = 0) {
     const isIncome = movement.tipo === "INGRESO";
     if (isIncome) resumen.ingresos += amount;
     else resumen.egresos += amount;
+    const categorias = isIncome ? desglose.ingresos : desglose.egresos;
+    let categoria = categorias.find((item) => item.origen === movement.origen);
+    if (!categoria) {
+      categoria = categorias.find((item) => item.origen === "OTROS");
+      if (!categoria) {
+        categoria = { origen: "OTROS", nombre: "Otros", monto: 0 };
+        categorias.push(categoria);
+      }
+    }
+    categoria.monto += amount;
     if (String(movement.forma_pago_nombre || "").trim().toUpperCase() === "EFECTIVO") {
       if (isIncome) resumen.efectivoIngresos += amount;
       else resumen.efectivoEgresos += amount;
@@ -87,8 +110,174 @@ function summarizeCajaMovimientos(movimientos, saldoInicialEfectivo = 0) {
   resumen.efectivoIngresos = money(resumen.efectivoIngresos);
   resumen.efectivoEgresos = money(resumen.efectivoEgresos);
   resumen.efectivoEsperado = money(resumen.efectivoEsperado + resumen.efectivoIngresos - resumen.efectivoEgresos);
+  desglose.ingresos.forEach((item) => { item.monto = money(item.monto); });
+  desglose.egresos.forEach((item) => { item.monto = money(item.monto); });
   resumen.formas = [...formas.values()].sort((a, b) => String(a.forma_pago_nombre).localeCompare(String(b.forma_pago_nombre)));
   return resumen;
+}
+
+async function recalcularCajaSesion(id, executor = { query }) {
+  const sessionResult = await executor.query(
+    `select * from caja_sesiones where idcaja_sesion = $1 for update`,
+    [id]
+  );
+  const session = sessionResult.rows[0];
+  if (!session) return null;
+
+  const movementsResult = await executor.query(
+    `select * from caja_sesion_movimientos
+     where fk_idcaja_sesion = $1
+     order by ocurrido_en, idcaja_sesion_movimiento`,
+    [id]
+  );
+  const resumen = summarizeCajaMovimientos(movementsResult.rows, session.saldo_inicial_efectivo);
+
+  await executor.query(`delete from caja_sesion_formas_pago where fk_idcaja_sesion = $1`, [id]);
+  for (const forma of resumen.formas) {
+    await executor.query(
+      `insert into caja_sesion_formas_pago (
+         fk_idcaja_sesion, fk_idforma_pago, forma_pago_nombre,
+         forma_pago_icono, forma_pago_color, ingresos, egresos, neto
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, forma.fk_idforma_pago, forma.forma_pago_nombre, forma.forma_pago_icono,
+        forma.forma_pago_color, forma.ingresos, forma.egresos, forma.neto]
+    );
+  }
+
+  const values = [
+    resumen.ingresos,
+    resumen.egresos,
+    resumen.neto,
+    resumen.efectivoEsperado
+  ];
+  let sql = `update caja_sesiones
+             set total_ingresos = $1,
+                 total_egresos = $2,
+                 total_neto = $3,
+                 efectivo_esperado = $4`;
+  if (session.estado === "CERRADA") {
+    values.push(session.efectivo_contado);
+    values.push(session.efectivo_contado === null ? null : money(session.efectivo_contado - resumen.efectivoEsperado));
+    sql += `, diferencia = $6`;
+  }
+  sql += ` where idcaja_sesion = $${values.length + 1}`;
+  values.push(id);
+  await executor.query(sql, values);
+  return resumen;
+}
+
+async function sincronizarLavadoEnCaja(lavadoId, executor = { query }) {
+  const lavadoResult = await executor.query(
+    `select l.*, fp.nombre as forma_pago_nombre, fp.icono_ruta as forma_pago_icono,
+            fp.color as forma_pago_color, c.chapa, c.marca_modelo
+     from lavados l
+     join formas_pago fp on fp.idforma_pago = l.fk_idforma_pago
+     left join clientes c on c.idcliente = l.fk_idcliente
+     where l.idlavado = $1
+     for update of l`,
+    [lavadoId]
+  );
+  const lavado = lavadoResult.rows[0];
+  if (!lavado) throw new Error("Lavado no encontrado.");
+
+  const affectedSessions = new Set();
+  const movementResult = await executor.query(
+    `select * from caja_sesion_movimientos
+     where fk_idlavado = $1
+     for update`,
+    [lavado.idlavado]
+  );
+  movementResult.rows.forEach((movement) => affectedSessions.add(movement.fk_idcaja_sesion));
+
+  const isCounted = lavado.estado !== "ANULADO"
+    && lavado.condicion === "CONTADO"
+    && lavado.fk_idgrupo_cliente_creditos === null
+    && money(lavado.total) > 0;
+
+  if (isCounted) {
+    const occurredAt = lavado.fecha_creado;
+    let movement = movementResult.rows[0];
+    if (!movement) {
+      const sessionResult = await executor.query(
+        `select idcaja_sesion
+         from caja_sesiones
+         where abierta_en <= $1
+           and (cerrada_en is null or cerrada_en >= $1)
+         order by abierta_en desc
+         limit 1`,
+        [occurredAt]
+      );
+      movement = sessionResult.rows[0] ? { fk_idcaja_sesion: sessionResult.rows[0].idcaja_sesion } : null;
+    }
+    if (movement) {
+      affectedSessions.add(movement.fk_idcaja_sesion);
+      const movementValues = [lavado.fk_idforma_pago, money(lavado.total), lavado.forma_pago_nombre,
+        lavado.forma_pago_icono, lavado.forma_pago_color,
+        `Lavado #${lavado.idlavado}${lavado.chapa ? ` - ${lavado.chapa}` : ""}`, lavado.marca_modelo];
+      if (movementResult.rows.length) {
+        await executor.query(
+          `update caja_sesion_movimientos
+           set fk_idforma_pago = $1,
+               monto = $2,
+               forma_pago_nombre = $3,
+               forma_pago_icono = $4,
+               forma_pago_color = $5,
+               referencia = $6,
+               descripcion = $7
+           where idcaja_sesion_movimiento = $8`,
+          [...movementValues, movementResult.rows[0].idcaja_sesion_movimiento]
+        );
+      } else {
+        await executor.query(
+          `insert into caja_sesion_movimientos (
+             fk_idcaja_sesion, tipo, origen, fk_idlavado, fk_idforma_pago, monto, ocurrido_en,
+             forma_pago_nombre, forma_pago_icono, forma_pago_color, referencia, descripcion
+           ) values ($1, 'INGRESO', 'LAVADO', $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [movement.fk_idcaja_sesion, lavado.idlavado, ...movementValues.slice(0, 1), movementValues[1],
+            occurredAt, ...movementValues.slice(2)]
+        );
+      }
+    }
+  } else if (movementResult.rows.length) {
+    await executor.query(`delete from caja_sesion_movimientos where fk_idlavado = $1`, [lavado.idlavado]);
+  }
+
+  if (lavado.fk_idgrupo_cliente_creditos) {
+    const creditMovementResult = await executor.query(
+      `select csm.*, gcc.estado
+       from caja_sesion_movimientos csm
+       join grupo_cliente_creditos gcc on gcc.idgrupo_cliente_creditos = csm.fk_idgrupo_cliente_creditos
+       where csm.fk_idgrupo_cliente_creditos = $1
+       for update`,
+      [lavado.fk_idgrupo_cliente_creditos]
+    );
+    if (creditMovementResult.rows[0]) {
+      const creditMovement = creditMovementResult.rows[0];
+      affectedSessions.add(creditMovement.fk_idcaja_sesion);
+      const totalResult = await executor.query(
+        `select coalesce(sum(total) filter (where estado <> 'ANULADO'), 0) as total
+         from lavados where fk_idgrupo_cliente_creditos = $1`,
+        [lavado.fk_idgrupo_cliente_creditos]
+      );
+      const total = money(totalResult.rows[0].total);
+      if (total > 0) {
+        await executor.query(
+          `update caja_sesion_movimientos
+           set monto = $1
+           where idcaja_sesion_movimiento = $2`,
+          [total, creditMovement.idcaja_sesion_movimiento]
+        );
+      } else {
+        await executor.query(
+          `delete from caja_sesion_movimientos where idcaja_sesion_movimiento = $1`,
+          [creditMovement.idcaja_sesion_movimiento]
+        );
+      }
+    }
+  }
+
+  for (const sessionId of affectedSessions) await recalcularCajaSesion(sessionId, executor);
+  return lavado;
 }
 
 async function getCajaSesionAbierta(executor = { query }) {
@@ -658,5 +847,7 @@ module.exports = {
   getCajaSesion,
   getCajaSesionAbierta,
   getCajaSesiones,
-  summarizeCajaMovimientos
+  recalcularCajaSesion,
+  summarizeCajaMovimientos,
+  sincronizarLavadoEnCaja
 };
